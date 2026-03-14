@@ -29,8 +29,10 @@ After install, skills are available in Cursor chat. The agent applies them when 
 **Examples:**
 - `@craft-pr-upstream` — runs the full workflow: merge upstream main, resolve conflicts, push, create PR
 - `@sync-main` — merge main into your branch
+- `@sync-upstream` — sync with upstream (fetch, merge, resolve, push)
 - `@format-code` — format the project
 - `@run-tests` — run the test suite
+- `@ship` — run checks, then commit and push
 
 Skills run automatically when the agent detects a matching intent. Use `@skill-name` when you want to force a specific skill.
 
@@ -67,9 +69,11 @@ Install copies repo → `~/.cursor`. Sync copies `~/.cursor` → repo.
 | Skill | Use |
 |-------|-----|
 | sync-main | Merge main into current branch |
+| sync-upstream | Sync with upstream main (fetch, merge, resolve, push) |
 | sync-skills | Backup local skills to repo |
 | run-tests | Run project test suite |
 | format-code | Format with project formatter |
+| ship | Run format/lint/test, then add, commit, push |
 | craft-pr | Create/update PR with gh CLI |
 | craft-pr-upstream | PR from fork to original repo (merge upstream main first) |
 | create-rule | Add `.cursor/rules/` |
@@ -80,7 +84,7 @@ Install copies repo → `~/.cursor`. Sync copies `~/.cursor` → repo.
 | shell | Literal command via `/shell` |
 | update-cursor-settings | Editor settings |
 
-Skills apply when your request matches. Examples: "sync my branch with main", "run tests", "format code", "craft a PR", "create PR to upstream".
+Skills apply when your request matches. Examples: "sync my branch with main", "sync with upstream", "run tests", "format code", "ship changes", "craft a PR", "create PR to upstream".
 
 ## Adding skills
 
