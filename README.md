@@ -48,6 +48,7 @@ Install copies repo → `~/.cursor`. Sync copies `~/.cursor` → repo.
 | run-tests | Run project test suite |
 | format-code | Format with project formatter |
 | craft-pr | Create/update PR with gh CLI |
+| craft-pr-upstream | PR from fork to original repo (merge upstream main first) |
 | create-rule | Add `.cursor/rules/` |
 | create-skill | Write new skills |
 | create-subagent | Define subagents |
@@ -56,7 +57,7 @@ Install copies repo → `~/.cursor`. Sync copies `~/.cursor` → repo.
 | shell | Literal command via `/shell` |
 | update-cursor-settings | Editor settings |
 
-Skills apply when your request matches. Examples: "sync my branch with main", "run tests", "format code", "craft a PR".
+Skills apply when your request matches. Examples: "sync my branch with main", "run tests", "format code", "craft a PR", "create PR to upstream".
 
 ## Adding skills
 
