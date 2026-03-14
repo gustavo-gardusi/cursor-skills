@@ -11,7 +11,13 @@ description: >-
 
 Create a pull request from your fork to the original (upstream) repo. First merges upstream `main` into your current branch and resolves conflicts, then creates the PR.
 
+## On invoke
+
+**Start immediately.** When this skill is applied, run the first command right away. Do not summarize the workflow, ask for confirmation, or explain—use the Shell tool to run each command one by one until the PR is created or you must stop (e.g. not a fork, auth failed). Run one command, observe the result, then run the next.
+
 ## Prerequisites
+
+Run these checks first. Stop if any fail.
 
 | Check | Command | Install if missing |
 |-------|---------|--------------------|
@@ -20,9 +26,15 @@ Create a pull request from your fork to the original (upstream) repo. First merg
 | gh auth | `gh auth status` | `gh auth login` |
 | Fork | `gh repo view --json parent -q .parent` | Repo must be a fork |
 
+**First command to run:** `gh repo view --json parent -q .parent`
+
 ## Workflow
 
+Run each step in sequence. After each command, run the next. Do not batch or skip.
+
 ### 1. Ensure upstream remote
+
+Run:
 
 ```bash
 gh repo view --json parent -q .parent
@@ -39,46 +51,60 @@ git remote add upstream "https://github.com/$PARENT.git" 2>/dev/null || true
 
 ### 2. Merge upstream main and resolve conflicts
 
-1. **Save branch** – `BRANCH=$(git branch --show-current)`
-2. **Fetch upstream** – `git fetch upstream`
-3. **Merge** – `git merge upstream/main`
+Run in order:
+1. `BRANCH=$(git branch --show-current)`
+2. `git fetch upstream`
+3. `git merge upstream/main`
 4. **If conflicts** – Resolve each:
-   - List: `git status`
-   - Edit conflicted files, remove `<<<<<<<`, `=======`, `>>>>>>>` markers
-   - `git add <file>` after each resolution
-   - `git commit -m "Merge upstream/main into $BRANCH"`
+   - Run `git status` to list conflicted files
+   - Edit each file to resolve conflicts
+   - Run `git add <file>` then `git commit -m "Merge upstream/main into $BRANCH"`
 5. **If no conflicts** – Merge completes automatically (or already up to date)
 
 ### 3. Push to fork
 
-```bash
-git push origin $BRANCH
-```
+Run: `git push origin $BRANCH`
 
-### 4. Create PR to upstream
+### 4. Create PR to upstream with gh
 
-Get fork owner and upstream repo:
+Run to get values:
 
 ```bash
 FORK_OWNER=$(gh repo view --json owner -q .owner.login)
 UPSTREAM=$(gh repo view --json parent -q '.parent.owner.login + "/" + .parent.name')
 ```
 
-Check for existing PR:
+Run: `gh pr list --repo "$UPSTREAM" --head "$FORK_OWNER:$BRANCH" --base main`
 
-```bash
-gh pr list --repo "$UPSTREAM" --head "$FORK_OWNER:$BRANCH" --base main
+If a PR exists, the push in step 3 already updated it. Done.
+
+If no PR exists, run `gh pr create` to create it.
+
+First run `git diff upstream/main...HEAD --stat` to see changes. Build title and body from that output:
+
+**Title template:** One line summarizing the main change. Examples:
+- `Add X` / `Fix Y` / `Simplify Z`
+- `[TICKET-123] Add X` if user provides a ticket
+
+**Body template:** Run `git diff upstream/main...HEAD --stat` and format as:
+
+```markdown
+## Summary
+[One sentence: what this PR does]
+
+## Changes
+- [file/path]: [brief change]
+- ...
+
+## Notes
+[Optional: user context, breaking changes, follow-up]
 ```
 
-If PR exists, the push in step 3 already updated it. Done.
+Example: For `4 files changed, 106 insertions(+), 50 deletions(-)` across README, .gitignore, package.sh, craft-pr-upstream:
+- Title: `Simplify repo, add craft-pr-upstream skill`
+- Body: List each file and its change (e.g. "README: clone-only setup", "craft-pr-upstream: new skill for fork→upstream PRs")
 
-If no PR, create:
-
-```bash
-gh pr create --repo "$UPSTREAM" --base main --head "$FORK_OWNER:$BRANCH" --title "..." --body "..."
-```
-
-Build title from changes: `git diff upstream/main...HEAD --stat`. Use `[TICKET] Summary` if user provides a ticket.
+**You must run `gh pr create`** with the built title and body. Do not skip it.
 
 ## Notes
 

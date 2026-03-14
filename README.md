@@ -18,6 +18,22 @@ cd cursor-skills
 ./scripts/install-skills.sh
 ```
 
+## Using skills in Cursor
+
+After install, skills are available in Cursor chat. The agent applies them when your request matches.
+
+**Invoke a skill:**
+- Type `@skill-name` (e.g. `@craft-pr-upstream`) to attach the skill to your message
+- Or describe what you want: "sync my branch with main", "run tests", "create PR to upstream"
+
+**Examples:**
+- `@craft-pr-upstream` — runs the full workflow: merge upstream main, resolve conflicts, push, create PR
+- `@sync-main` — merge main into your branch
+- `@format-code` — format the project
+- `@run-tests` — run the test suite
+
+Skills run automatically when the agent detects a matching intent. Use `@skill-name` when you want to force a specific skill.
+
 ## Structure
 
 Mirrors `~/.cursor`:
@@ -26,9 +42,16 @@ Mirrors `~/.cursor`:
 skills/          → ~/.cursor/skills
 skills-cursor/   → ~/.cursor/skills-cursor
 scripts/
-  install-skills.sh   # repo → ~/.cursor
-  sync-skills.sh      # ~/.cursor → repo
+  install-skills.sh   # repo → ~/.cursor (run after clone/pull)
+  sync-skills.sh      # ~/.cursor → repo (run after editing skills locally)
 ```
+
+## Scripts
+
+| Script | Purpose |
+|--------|---------|
+| `install-skills.sh` | Copy `skills/` and `skills-cursor/` from repo to `~/.cursor`. Run after clone or pull. |
+| `sync-skills.sh` | Copy `~/.cursor/skills` and `~/.cursor/skills-cursor` into repo. Run after adding or editing skills locally. |
 
 ## Install vs sync
 
