@@ -2,6 +2,22 @@
 
 Sync Cursor IDE agent skills between `~/.cursor` and this repo.
 
+## Setup
+
+Clone and install:
+
+```bash
+# SSH
+git clone git@github.com:OWNER/cursor-skills.git
+cd cursor-skills
+
+# or HTTPS
+git clone https://github.com/OWNER/cursor-skills.git
+cd cursor-skills
+
+./scripts/install-skills.sh
+```
+
 ## Structure
 
 Mirrors `~/.cursor`:
@@ -10,46 +26,9 @@ Mirrors `~/.cursor`:
 skills/          → ~/.cursor/skills
 skills-cursor/   → ~/.cursor/skills-cursor
 scripts/
-  install-skills.sh
-  sync-skills.sh
+  install-skills.sh   # repo → ~/.cursor
+  sync-skills.sh      # ~/.cursor → repo
 ```
-
-## Setup
-
-```bash
-git clone <your-repo-url>
-cd <repo-name>
-./scripts/install-skills.sh
-```
-
-## New laptop (from zip)
-
-Transfer the zip to the new machine, then:
-
-```bash
-unzip cursor-commands.zip
-cd cursor-commands
-./scripts/install-skills.sh
-```
-
-To create your own repo from the content:
-
-```bash
-cd cursor-commands
-rm -rf .git
-git init
-git add .
-git commit -m "Initial: Cursor skills"
-gh repo create cursor-commands --public --source=. --remote=origin --push
-```
-
-## Package (create zip)
-
-```bash
-./scripts/package.sh
-```
-
-Creates `<repo-name>.zip` in the repo directory (excludes .git). Transfer the zip to another machine to set up there.
 
 ## Install vs sync
 
@@ -59,10 +38,6 @@ Creates `<repo-name>.zip` in the repo directory (excludes .git). Transfer the zi
 | Sync | After editing skills in ~/.cursor | `./scripts/sync-skills.sh` |
 
 Install copies repo → `~/.cursor`. Sync copies `~/.cursor` → repo.
-
-## Usage
-
-Skills apply when your request matches. Examples: "sync my branch with main", "run tests", "format code", "craft a PR".
 
 ## Skills
 
@@ -80,6 +55,8 @@ Skills apply when your request matches. Examples: "sync my branch with main", "r
 | migrate-to-skills | Convert rules/commands to skills |
 | shell | Literal command via `/shell` |
 | update-cursor-settings | Editor settings |
+
+Skills apply when your request matches. Examples: "sync my branch with main", "run tests", "format code", "craft a PR".
 
 ## Adding skills
 
