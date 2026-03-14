@@ -2,6 +2,38 @@
 
 Sync Cursor IDE agent skills between `~/.cursor` and this repo.
 
+## Setup
+
+Clone and install:
+
+```bash
+# SSH
+git clone git@github.com:OWNER/cursor-skills.git
+cd cursor-skills
+
+# or HTTPS
+git clone https://github.com/OWNER/cursor-skills.git
+cd cursor-skills
+
+./scripts/install-skills.sh
+```
+
+## Using skills in Cursor
+
+After install, skills are available in Cursor chat. The agent applies them when your request matches.
+
+**Invoke a skill:**
+- Type `@skill-name` (e.g. `@craft-pr-upstream`) to attach the skill to your message
+- Or describe what you want: "sync my branch with main", "run tests", "create PR to upstream"
+
+**Examples:**
+- `@craft-pr-upstream` — runs the full workflow: merge upstream main, resolve conflicts, push, create PR
+- `@sync-main` — merge main into your branch
+- `@format-code` — format the project
+- `@run-tests` — run the test suite
+
+Skills run automatically when the agent detects a matching intent. Use `@skill-name` when you want to force a specific skill.
+
 ## Structure
 
 Mirrors `~/.cursor`:
@@ -10,46 +42,16 @@ Mirrors `~/.cursor`:
 skills/          → ~/.cursor/skills
 skills-cursor/   → ~/.cursor/skills-cursor
 scripts/
-  install-skills.sh
-  sync-skills.sh
+  install-skills.sh   # repo → ~/.cursor (run after clone/pull)
+  sync-skills.sh      # ~/.cursor → repo (run after editing skills locally)
 ```
 
-## Setup
+## Scripts
 
-```bash
-git clone <your-repo-url>
-cd <repo-name>
-./scripts/install-skills.sh
-```
-
-## New laptop (from zip)
-
-Transfer the zip to the new machine, then:
-
-```bash
-unzip cursor-commands.zip
-cd cursor-commands
-./scripts/install-skills.sh
-```
-
-To create your own repo from the content:
-
-```bash
-cd cursor-commands
-rm -rf .git
-git init
-git add .
-git commit -m "Initial: Cursor skills"
-gh repo create cursor-commands --public --source=. --remote=origin --push
-```
-
-## Package (create zip)
-
-```bash
-./scripts/package.sh
-```
-
-Creates `<repo-name>.zip` in the repo directory (excludes .git). Transfer the zip to another machine to set up there.
+| Script | Purpose |
+|--------|---------|
+| `install-skills.sh` | Copy `skills/` and `skills-cursor/` from repo to `~/.cursor`. Run after clone or pull. |
+| `sync-skills.sh` | Copy `~/.cursor/skills` and `~/.cursor/skills-cursor` into repo. Run after adding or editing skills locally. |
 
 ## Install vs sync
 
@@ -60,10 +62,6 @@ Creates `<repo-name>.zip` in the repo directory (excludes .git). Transfer the zi
 
 Install copies repo → `~/.cursor`. Sync copies `~/.cursor` → repo.
 
-## Usage
-
-Skills apply when your request matches. Examples: "sync my branch with main", "run tests", "format code", "craft a PR".
-
 ## Skills
 
 | Skill | Use |
@@ -73,6 +71,7 @@ Skills apply when your request matches. Examples: "sync my branch with main", "r
 | run-tests | Run project test suite |
 | format-code | Format with project formatter |
 | craft-pr | Create/update PR with gh CLI |
+| craft-pr-upstream | PR from fork to original repo (merge upstream main first) |
 | create-rule | Add `.cursor/rules/` |
 | create-skill | Write new skills |
 | create-subagent | Define subagents |
@@ -80,6 +79,8 @@ Skills apply when your request matches. Examples: "sync my branch with main", "r
 | migrate-to-skills | Convert rules/commands to skills |
 | shell | Literal command via `/shell` |
 | update-cursor-settings | Editor settings |
+
+Skills apply when your request matches. Examples: "sync my branch with main", "run tests", "format code", "craft a PR", "create PR to upstream".
 
 ## Adding skills
 
