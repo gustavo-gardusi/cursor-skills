@@ -14,7 +14,22 @@ Or clone via HTTPS: `git clone https://github.com/OWNER/cursor-skills.git`
 
 ## Using skills
 
-Invoke with `@skill-name` or describe what you want. Skill names match the folder path with hyphens. Examples: `@gh-pr`, `@code-format-js`, `@code-setup-python`, `@code-ship`
+After installing, skills are available in Cursor Agent chat.
+
+**Slash command** — In Agent chat, type `/` then the skill name (or search for it). Examples:
+
+| Command | Action |
+|------|--------|
+| `/gh-pr` | Create or update a PR |
+| `/gh-push` | Add, commit, push |
+| `/gh-pull-main` | Merge main into current branch |
+| `/code-ship` | Format, lint, test, then commit and push |
+| `/code-format-js` | Format JS/TS with Prettier |
+| `/code-test-python` | Run pytest |
+
+**@ mention** — Type `@skill-name` to attach the skill as context (e.g. `@gh-pr`, `@code-format-js`).
+
+**Natural language** — Describe what you want; the agent may apply a relevant skill (e.g. "create a PR", "format my code", "run tests").
 
 ## Project structure
 
@@ -36,7 +51,7 @@ src/
     push/            # Add, commit, push
     pr/              # Create/update PR
     pr-upstream/     # PR from fork to upstream
-  code/              # Format, lint, test, setup, ship, settings
+  code/              # Format, lint, test, setup, ship
     format/          # js, rust, python, go
     lint/
     test/
