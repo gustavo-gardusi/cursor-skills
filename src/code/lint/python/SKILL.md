@@ -1,5 +1,5 @@
 ---
-name: lint-python
+name: code-lint-python
 description: >-
   Lint Python with ruff or pylint. Use when user wants to lint Python code.
 ---

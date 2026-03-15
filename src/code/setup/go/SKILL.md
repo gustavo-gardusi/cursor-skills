@@ -1,5 +1,5 @@
 ---
-name: setup-go
+name: code-setup-go
 description: >-
   Set up Go dev environment. Use when user wants to install Go or prepare
   first-time local environment for Go projects.

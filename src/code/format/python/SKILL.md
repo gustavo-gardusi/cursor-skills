@@ -1,5 +1,5 @@
 ---
-name: format-python
+name: code-format-python
 description: >-
   Format Python with ruff or black. Use when user wants to format Python code.
 ---

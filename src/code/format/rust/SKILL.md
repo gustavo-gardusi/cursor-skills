@@ -1,5 +1,5 @@
 ---
-name: format-rust
+name: code-format-rust
 description: >-
   Format Rust with rustfmt. Use when user wants to format Rust code or run
   cargo fmt.

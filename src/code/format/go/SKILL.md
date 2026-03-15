@@ -1,5 +1,5 @@
 ---
-name: format-go
+name: code-format-go
 description: >-
   Format Go with gofmt. Use when user wants to format Go code or run go fmt.
 ---

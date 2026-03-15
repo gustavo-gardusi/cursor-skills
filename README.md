@@ -14,7 +14,7 @@ Or clone via HTTPS: `git clone https://github.com/OWNER/cursor-skills.git`
 
 ## Using skills
 
-Invoke with `@skill-name` or describe what you want. Examples: `@gh-pr`, `@format-js`, `@setup-python`, `@ship`
+Invoke with `@skill-name` or describe what you want. Skill names match the folder path with hyphens. Examples: `@gh-pr`, `@code-format-js`, `@code-setup-python`, `@code-ship`
 
 ## Project structure
 
@@ -42,29 +42,29 @@ src/
     test/
     setup/           # First-time env: brew, venv
     ship/            # Format + lint + test + commit + push
-    settings/cursor/
 ```
 
 ## Skills
 
-| Domain | Skill | Use |
-|--------|-------|-----|
-| gh | gh-pull-main | Merge main into branch |
-| gh | gh-pull-upstream | Sync fork with upstream |
-| gh | gh-push | Add, commit, push |
-| gh | gh-pr | Create/update PR |
-| gh | gh-pr-upstream | PR from fork to upstream |
-| code | format-js, format-rust, format-python, format-go | Format by language |
-| code | lint-js, lint-rust, lint-python, lint-go | Lint by language |
-| code | test-js, test-rust, test-python, test-go | Test by language |
-| code | setup-js, setup-rust, setup-python, setup-go | First-time env setup (brew, venv) |
-| code | ship | Format, lint, test, commit, push |
-| code | settings-cursor | Editor settings |
+Skill names = folder path with hyphens (e.g. `src/gh/pr` → `gh-pr`, `src/code/format/js` → `code-format-js`).
+
+| Skill | Use |
+|-------|-----|
+| gh-pull-main | Merge main into branch |
+| gh-pull-upstream | Sync fork with upstream |
+| gh-push | Add, commit, push |
+| gh-pr | Create/update PR |
+| gh-pr-upstream | PR from fork to upstream |
+| code-format-js, code-format-rust, code-format-python, code-format-go | Format by language |
+| code-lint-js, code-lint-rust, code-lint-python, code-lint-go | Lint by language |
+| code-test-js, code-test-rust, code-test-python, code-test-go | Test by language |
+| code-setup-js, code-setup-rust, code-setup-python, code-setup-go | First-time env setup (brew, venv) |
+| code-ship | Format, lint, test, commit, push |
 
 ## Install
 
-Run `./install-skills.sh` after clone or pull. Copies `src/` to `~/.cursor/skills-cursor`.
+Run `./install-skills.sh` after clone or pull. If `~/.cursor/skills-cursor` already has skills, you'll be prompted: clear existing and install fresh, or keep existing and add/overwrite. Use `./install-skills.sh -y` to skip the prompt and clear.
 
 ## Adding skills
 
-Add `src/domain/name/SKILL.md` (e.g. `src/code/format/ruby/SKILL.md`), then run `./install-skills.sh`
+Add `src/domain/name/SKILL.md`. Set `name:` in frontmatter to the path with hyphens (e.g. `src/code/format/ruby` → `name: code-format-ruby`). Run `./install-skills.sh`

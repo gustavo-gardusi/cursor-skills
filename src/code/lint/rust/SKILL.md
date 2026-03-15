@@ -1,5 +1,5 @@
 ---
-name: lint-rust
+name: code-lint-rust
 description: >-
   Lint Rust with clippy. Use when user wants to lint or check Rust code.
 ---

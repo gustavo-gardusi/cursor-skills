@@ -1,5 +1,5 @@
 ---
-name: setup-rust
+name: code-setup-rust
 description: >-
   Set up Rust dev environment. Use when user wants to install Rust, cargo,
   or prepare first-time local environment for Rust projects.

@@ -1,5 +1,5 @@
 ---
-name: test-go
+name: code-test-go
 description: >-
   Run Go tests. Use when user wants to run tests in Go projects.
 ---

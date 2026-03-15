@@ -1,5 +1,5 @@
 ---
-name: setup-python
+name: code-setup-python
 description: >-
   Set up Python dev environment. Use when user wants to install Python,
   create venv, or prepare first-time local environment for Python projects.

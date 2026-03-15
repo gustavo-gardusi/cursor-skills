@@ -1,5 +1,5 @@
 ---
-name: ship
+name: code-ship
 description: >-
   Run format, lint, test, then add, commit, push. Use when user wants to ship
   changes, push after checks, or deploy after validation.
@@ -15,9 +15,9 @@ Start immediately. Run commands one by one. Stop if any check fails.
 
 ## Workflow
 
-1. **Format** — format-js, format-rust, format-python, or format-go
-2. **Lint** — lint-js, lint-rust, lint-python, or lint-go
-3. **Test** — test-js, test-rust, test-python, or test-go
+1. **Format** — code-format-js, code-format-rust, code-format-python, or code-format-go
+2. **Lint** — code-lint-js, code-lint-rust, code-lint-python, or code-lint-go
+3. **Test** — code-test-js, code-test-rust, code-test-python, or code-test-go
 4. **Commit** — `git add .`, build message from `git diff --stat`, `git commit -m "..."`, `git push`
 
 Skip format/lint/test if not configured for project.

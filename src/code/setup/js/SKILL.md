@@ -1,5 +1,5 @@
 ---
-name: setup-js
+name: code-setup-js
 description: >-
   Set up JS/Node dev environment. Use when user wants to install Node, pnpm,
   or prepare first-time local environment for JS/TS projects.

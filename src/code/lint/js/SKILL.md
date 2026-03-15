@@ -1,5 +1,5 @@
 ---
-name: lint-js
+name: code-lint-js
 description: >-
   Lint JS/TS with ESLint or Biome. Use when user wants to lint, check code
   quality, or run ESLint in Node/JS projects.

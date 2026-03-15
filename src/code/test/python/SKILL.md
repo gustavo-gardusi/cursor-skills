@@ -1,5 +1,5 @@
 ---
-name: test-python
+name: code-test-python
 description: >-
   Run Python tests with pytest. Use when user wants to run tests in Python
   projects.

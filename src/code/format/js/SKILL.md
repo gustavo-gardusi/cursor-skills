@@ -1,5 +1,5 @@
 ---
-name: format-js
+name: code-format-js
 description: >-
   Format JS/TS/CSS/JSON with Prettier. Use when user wants to format code in
   Node, JavaScript, TypeScript, or frontend projects.

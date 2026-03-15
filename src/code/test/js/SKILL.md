@@ -1,5 +1,5 @@
 ---
-name: test-js
+name: code-test-js
 description: >-
   Run JS/Node test suite. Use when user wants to run tests in npm, yarn,
   pnpm, or Node projects.

@@ -1,5 +1,5 @@
 ---
-name: test-rust
+name: code-test-rust
 description: >-
   Run Rust tests with cargo. Use when user wants to run tests in Rust projects.
 ---

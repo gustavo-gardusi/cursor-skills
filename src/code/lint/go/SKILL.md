@@ -1,5 +1,5 @@
 ---
-name: lint-go
+name: code-lint-go
 description: >-
   Lint Go with go vet or staticcheck. Use when user wants to lint or vet Go code.
 ---
