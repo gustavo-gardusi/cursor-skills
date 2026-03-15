@@ -23,6 +23,8 @@ After installing, skills are available in Cursor Agent chat.
 | `/gh-pr` | Create or update a PR |
 | `/gh-push` | Add, commit, push |
 | `/gh-pull-main` | Merge main into current branch |
+| `/gh-pull-upstream` | Sync fork with upstream |
+| `/gh-pr-upstream` | Create PR from fork to upstream |
 | `/code-ship` | Format, lint, test, then commit and push |
 | `/code-format-js` | Format JS/TS with Prettier |
 | `/code-test-python` | Run pytest |
