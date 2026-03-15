@@ -17,22 +17,26 @@ Git repo, `gh` CLI, `gh auth status`. Install: `brew install gh`, `gh auth login
 
 1. `BRANCH=$(git branch --show-current)`
 2. `gh pr list --head $BRANCH --base main` — check existing
-3. Diff: `git diff main...HEAD`
-4. Create: `gh pr create --base main --head $BRANCH --title "..." --body "..."`
-5. Update: `gh pr edit --body "..."`
+3. Diff: `git diff main...HEAD --name-status`
+4. If PR exists: `gh pr edit <number> --title "..." --body "..."`
+5. If none: `gh pr create --base main --head $BRANCH --title "..." --body "..."`
 
 ## PR description
 
-Build a meaningful body from the diff. Use `git diff main...HEAD --name-status` to categorize:
+Use `git diff main...HEAD --name-status` to categorize. Count A=added, D=deleted, M=modified.
 
 **Structure:**
 
-1. **Summary** — One short paragraph: total files changed, counts of added/deleted/modified. Call out notable additions or removals.
-2. **New files** — List paths. Brief note per file or per group.
-3. **Deleted files** — List paths. Add a note: "Review removals before merging."
-4. **Modified** — List paths. One-line summary per file or per logical group.
+1. **Summary** — One short paragraph describing the overall changes of the entire PR. What was done and why. No file counts.
+2. **New files (N)** — One line per file: `path` — brief description of what it adds.
+3. **Deleted files (N)** — One line per file: `path` — brief description. End section with: "Review removals before merging."
+4. **Modified (N)** — One line per file: `path` — brief description of changes.
+
+Keep all descriptions brief and direct. Use `path` — `description` format.
 
 **Title:** One-line summary from changes (e.g. "Add X", "Fix Y", "Refactor Z").
+
+**Emoji (optional):** Add emoji where it helps readability. Examples: section headers (✨ New, 🗑️ Deleted, 📝 Modified), title prefix (✨ Refactor..., 🐛 Fix..., 📋 Add...), important notes (⚠️ Review removals before merging). Use sparingly; skip if it feels forced.
 
 ## Notes
 
