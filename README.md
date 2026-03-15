@@ -7,7 +7,7 @@ Sync Cursor IDE agent skills between `~/.cursor` and this repo.
 ```bash
 git clone git@github.com:OWNER/cursor-skills.git
 cd cursor-skills
-./scripts/install-skills.sh
+./install-skills.sh
 ```
 
 Or clone via HTTPS: `git clone https://github.com/OWNER/cursor-skills.git`
@@ -20,24 +20,20 @@ Invoke with `@skill-name` or describe what you want. Examples: `@gh-pr`, `@forma
 
 ```
 cursor-skills/
-  skills/             # Personal skills (empty by default)
-  skills-cursor/      # Skills (nested: gh/pr/, code/format/js/, etc.)
-  scripts/
-    install-skills.sh # Repo → ~/.cursor
-    sync-skills.sh    # ~/.cursor → repo
+  src/                # Skills (nested: gh/pr/, code/format/js/, etc.)
+  install-skills.sh   # src/ → ~/.cursor/skills-cursor
 ```
 
-Skills use nested folders. Each skill is a directory with `SKILL.md`. Scripts copy recursively.
+Each skill is a directory with `SKILL.md`. The install script copies recursively.
 
 ## Skills layout
 
 ```
-skills-cursor/
+src/
   gh/                 # Repo: pull, push, PR
     pull-main/       # Merge main into branch
     pull-upstream/   # Sync fork with upstream
     push/            # Add, commit, push
-    sync-skills/     # Backup skills to repo
     pr/              # Create/update PR
     pr-upstream/     # PR from fork to upstream
   code/              # Format, lint, test, setup, ship, settings
@@ -56,7 +52,6 @@ skills-cursor/
 | gh | gh-pull-main | Merge main into branch |
 | gh | gh-pull-upstream | Sync fork with upstream |
 | gh | gh-push | Add, commit, push |
-| gh | gh-sync-skills | Backup skills to repo |
 | gh | gh-pr | Create/update PR |
 | gh | gh-pr-upstream | PR from fork to upstream |
 | code | format-js, format-rust, format-python, format-go | Format by language |
@@ -66,15 +61,10 @@ skills-cursor/
 | code | ship | Format, lint, test, commit, push |
 | code | settings-cursor | Editor settings |
 
-## Scripts
+## Install
 
-| Script | Purpose |
-|--------|---------|
-| `install-skills.sh` | Copy `skills/` and `skills-cursor/` from repo to `~/.cursor`. Run after clone or pull. |
-| `sync-skills.sh` | Copy `~/.cursor/skills` and `~/.cursor/skills-cursor` into repo. Run after editing skills locally. |
-
-Both scripts support nested structure. They find all `SKILL.md` files and preserve paths.
+Run `./install-skills.sh` after clone or pull. Copies `src/` to `~/.cursor/skills-cursor`.
 
 ## Adding skills
 
-Add `skills-cursor/domain/name/SKILL.md` (e.g. `code/format/ruby/SKILL.md`), then run `./scripts/install-skills.sh`
+Add `src/domain/name/SKILL.md` (e.g. `src/code/format/ruby/SKILL.md`), then run `./install-skills.sh`
