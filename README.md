@@ -4,86 +4,82 @@ Sync Cursor IDE agent skills between `~/.cursor` and this repo.
 
 ## Setup
 
-Clone and install:
-
 ```bash
-# SSH
 git clone git@github.com:OWNER/cursor-skills.git
 cd cursor-skills
-
-# or HTTPS
-git clone https://github.com/OWNER/cursor-skills.git
-cd cursor-skills
-
-./scripts/install-skills.sh
+./install-skills.sh
 ```
 
-## Using skills in Cursor
+Or clone via HTTPS: `git clone https://github.com/OWNER/cursor-skills.git`
 
-After install, skills are available in Cursor chat. The agent applies them when your request matches.
+## Using skills
 
-**Invoke a skill:**
-- Type `@skill-name` (e.g. `@craft-pr-upstream`) to attach the skill to your message
-- Or describe what you want: "sync my branch with main", "run tests", "create PR to upstream"
+After installing, skills are available in Cursor Agent chat.
 
-**Examples:**
-- `@craft-pr-upstream` — runs the full workflow: merge upstream main, resolve conflicts, push, create PR
-- `@sync-main` — merge main into your branch
-- `@format-code` — format the project
-- `@run-tests` — run the test suite
+**Slash command** — In Agent chat, type `/` then the skill name (or search for it). Examples:
 
-Skills run automatically when the agent detects a matching intent. Use `@skill-name` when you want to force a specific skill.
+| Command | Action |
+|------|--------|
+| `/gh-pr` | Create or update a PR |
+| `/gh-push` | Add, commit, push |
+| `/gh-pull-main` | Merge main into current branch |
+| `/code-ship` | Format, lint, test, then commit and push |
+| `/code-format-js` | Format JS/TS with Prettier |
+| `/code-test-python` | Run pytest |
 
-## Structure
+**@ mention** — Type `@skill-name` to attach the skill as context (e.g. `@gh-pr`, `@code-format-js`).
 
-Mirrors `~/.cursor`:
+**Natural language** — Describe what you want; the agent may apply a relevant skill (e.g. "create a PR", "format my code", "run tests").
+
+## Project structure
 
 ```
-skills/          → ~/.cursor/skills
-skills-cursor/   → ~/.cursor/skills-cursor
-scripts/
-  install-skills.sh   # repo → ~/.cursor (run after clone/pull)
-  sync-skills.sh      # ~/.cursor → repo (run after editing skills locally)
+cursor-skills/
+  src/                # Skills (nested: gh/pr/, code/format/js/, etc.)
+  install-skills.sh   # src/ → ~/.cursor/skills-cursor
 ```
 
-## Scripts
+Each skill is a directory with `SKILL.md`. The install script copies recursively.
 
-| Script | Purpose |
-|--------|---------|
-| `install-skills.sh` | Copy `skills/` and `skills-cursor/` from repo to `~/.cursor`. Run after clone or pull. |
-| `sync-skills.sh` | Copy `~/.cursor/skills` and `~/.cursor/skills-cursor` into repo. Run after adding or editing skills locally. |
+## Skills layout
 
-## Install vs sync
-
-| Action | When | Command |
-|--------|------|---------|
-| Install | New machine, after pull | `./scripts/install-skills.sh` |
-| Sync | After editing skills in ~/.cursor | `./scripts/sync-skills.sh` |
-
-Install copies repo → `~/.cursor`. Sync copies `~/.cursor` → repo.
+```
+src/
+  gh/                 # Repo: pull, push, PR
+    pull-main/       # Merge main into branch
+    pull-upstream/   # Sync fork with upstream
+    push/            # Add, commit, push
+    pr/              # Create/update PR
+    pr-upstream/     # PR from fork to upstream
+  code/              # Format, lint, test, setup, ship
+    format/          # js, rust, python, go
+    lint/
+    test/
+    setup/           # First-time env: brew, venv
+    ship/            # Format + lint + test + commit + push
+```
 
 ## Skills
 
+Skill names = folder path with hyphens (e.g. `src/gh/pr` → `gh-pr`, `src/code/format/js` → `code-format-js`).
+
 | Skill | Use |
 |-------|-----|
-| sync-main | Merge main into current branch |
-| sync-skills | Backup local skills to repo |
-| run-tests | Run project test suite |
-| format-code | Format with project formatter |
-| craft-pr | Create/update PR with gh CLI |
-| craft-pr-upstream | PR from fork to original repo (merge upstream main first) |
-| create-rule | Add `.cursor/rules/` |
-| create-skill | Write new skills |
-| create-subagent | Define subagents |
-| cursor-blame | Attribution |
-| migrate-to-skills | Convert rules/commands to skills |
-| shell | Literal command via `/shell` |
-| update-cursor-settings | Editor settings |
+| gh-pull-main | Merge main into branch |
+| gh-pull-upstream | Sync fork with upstream |
+| gh-push | Add, commit, push |
+| gh-pr | Create/update PR |
+| gh-pr-upstream | PR from fork to upstream |
+| code-format-js, code-format-rust, code-format-python, code-format-go | Format by language |
+| code-lint-js, code-lint-rust, code-lint-python, code-lint-go | Lint by language |
+| code-test-js, code-test-rust, code-test-python, code-test-go | Test by language |
+| code-setup-js, code-setup-rust, code-setup-python, code-setup-go | First-time env setup (brew, venv) |
+| code-ship | Format, lint, test, commit, push |
 
-Skills apply when your request matches. Examples: "sync my branch with main", "run tests", "format code", "craft a PR", "create PR to upstream".
+## Install
+
+Run `./install-skills.sh` after clone or pull. If `~/.cursor/skills-cursor` already has skills, you'll be prompted: clear existing and install fresh, or keep existing and add/overwrite. Use `./install-skills.sh -y` to skip the prompt and clear.
 
 ## Adding skills
 
-**In repo:** Add `skills/name/SKILL.md` or `skills-cursor/name/SKILL.md`, then run `./scripts/install-skills.sh`
-
-**Locally:** Create in `~/.cursor/skills` or `~/.cursor/skills-cursor`, run `./scripts/sync-skills.sh`, then `git add skills/ skills-cursor/ && git commit -m "Sync skills"`
+Add `src/domain/name/SKILL.md`. Set `name:` in frontmatter to the path with hyphens (e.g. `src/code/format/ruby` → `name: code-format-ruby`). Run `./install-skills.sh`
