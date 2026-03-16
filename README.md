@@ -26,6 +26,7 @@ In Cursor Agent chat: type `/` + skill name (e.g. `/gh-pr`, `/code-format-js`), 
 |-------|-----|
 | gh-pull | Pull current branch, then merge main and/or upstream; push if merged |
 | gh-pr | Sync build (branch + main/upstream), format & test, commit & push, then create/update PR |
+| gh-pr-review | Gather PR comments and failed checks via gh; address each with minimal changes scoped to PR diff |
 | code-format-js, code-format-rust, code-format-python, code-format-go | Format by language |
 | code-lint-js, code-lint-rust, code-lint-python, code-lint-go | Lint by language |
 | code-test-js, code-test-rust, code-test-python, code-test-go | Test by language |
