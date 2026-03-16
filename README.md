@@ -1,87 +1,44 @@
 # Cursor Skills
 
-Sync Cursor IDE agent skills between `~/.cursor` and this repo.
+Sync Cursor IDE agent skills between `~/.cursor/skills-cursor` and this repo’s `src/`.
 
 ## Setup
 
 ```bash
 git clone git@github.com:OWNER/cursor-skills.git
 cd cursor-skills
-./install-skills.sh
+./skills.sh in
 ```
 
 Or clone via HTTPS: `git clone https://github.com/OWNER/cursor-skills.git`
 
 ## Using skills
 
-After installing, skills are available in Cursor Agent chat.
-
-**Slash command** — In Agent chat, type `/` then the skill name (or search for it). Examples:
-
-| Command | Action |
-|------|--------|
-| `/gh-pr` | Create or update a PR |
-| `/gh-push` | Add, commit, push |
-| `/gh-pull-main` | Merge main into current branch |
-| `/gh-pull-upstream` | Sync fork with upstream |
-| `/gh-pr-upstream` | Create PR from fork to upstream |
-| `/code-ship` | Format, lint, test, then commit and push |
-| `/code-format-js` | Format JS/TS with Prettier |
-| `/code-test-python` | Run pytest |
-
-**@ mention** — Type `@skill-name` to attach the skill as context (e.g. `@gh-pr`, `@code-format-js`).
-
-**Natural language** — Describe what you want; the agent may apply a relevant skill (e.g. "create a PR", "format my code", "run tests").
+In Cursor Agent chat: type `/` + skill name (e.g. `/gh-pr`, `/code-format-js`), or `@skill-name` to attach as context. You can also describe the task in plain language.
 
 ## Project structure
 
-```
-cursor-skills/
-  src/                # Skills (nested: gh/pr/, code/format/js/, etc.)
-  install-skills.sh   # src/ → ~/.cursor/skills-cursor
-```
-
-Each skill is a directory with `SKILL.md`. The install script copies recursively.
-
-## Skills layout
-
-```
-src/
-  gh/                 # Repo: pull, push, PR
-    pull-main/       # Merge main into branch
-    pull-upstream/   # Sync fork with upstream
-    push/            # Add, commit, push
-    pr/              # Create/update PR
-    pr-upstream/     # PR from fork to upstream
-  code/              # Format, lint, test, setup, ship
-    format/          # js, rust, python, go
-    lint/
-    test/
-    setup/           # First-time env: brew, venv
-    ship/            # Format + lint + test + commit + push
-```
+`src/` holds one `SKILL.md` per skill in nested dirs (e.g. `src/gh/pr` → skill name `gh-pr`). `./skills.sh` syncs repo ↔ `~/.cursor/skills-cursor`.
 
 ## Skills
 
-Skill names = folder path with hyphens (e.g. `src/gh/pr` → `gh-pr`, `src/code/format/js` → `code-format-js`).
-
 | Skill | Use |
 |-------|-----|
-| gh-pull-main | Merge main into branch |
-| gh-pull-upstream | Sync fork with upstream |
-| gh-push | Add, commit, push |
-| gh-pr | Create/update PR |
-| gh-pr-upstream | PR from fork to upstream |
+| gh-pull | Pull current branch, then merge main and/or upstream; push if merged |
+| gh-pr | Sync build (branch + main/upstream), format & test, commit & push, then create/update PR |
 | code-format-js, code-format-rust, code-format-python, code-format-go | Format by language |
 | code-lint-js, code-lint-rust, code-lint-python, code-lint-go | Lint by language |
 | code-test-js, code-test-rust, code-test-python, code-test-go | Test by language |
 | code-setup-js, code-setup-rust, code-setup-python, code-setup-go | First-time env setup (brew, venv) |
 | code-ship | Format, lint, test, commit, push |
 
-## Install
+## Sync (in / out)
 
-Run `./install-skills.sh` after clone or pull. If `~/.cursor/skills-cursor` already has skills, you'll be prompted: clear existing and install fresh, or keep existing and add/overwrite. Use `./install-skills.sh -y` to skip the prompt and clear.
+| Command | Description |
+|---------|-------------|
+| `./skills.sh in` | Repo → Cursor. Install (or add/overwrite). `in -y` to clear existing first. |
+| `./skills.sh out` | Cursor → Repo. Overwrite existing `src/` skills from local only. |
 
 ## Adding skills
 
-Add `src/domain/name/SKILL.md`. Set `name:` in frontmatter to the path with hyphens (e.g. `src/code/format/ruby` → `name: code-format-ruby`). Run `./install-skills.sh`
+Add `src/…/SKILL.md` with frontmatter `name: skill-name` (hyphenated path). Run `./skills.sh in`, or edit under `~/.cursor/skills-cursor` and run `./skills.sh out` to sync back.
