@@ -8,6 +8,10 @@ description: >-
 
 Run go vet or staticcheck. Check for `go.mod`.
 
+## On invoke
+
+Run from project root. Prefer golangci-lint if `.golangci.yml` exists; else `go vet ./...`. Report failures and fix or note.
+
 ## Commands
 
 - `go vet ./...` (built-in)

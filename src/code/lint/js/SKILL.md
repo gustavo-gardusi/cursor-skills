@@ -9,6 +9,10 @@ description: >-
 
 Run ESLint or Biome. Check package.json for `lint` script or `eslint`/`@biomejs/biome` dependency.
 
+## On invoke
+
+Run from project root. Prefer `npm run lint` (or pnpm/yarn) if present; else run eslint or biome per Detection. Use `--fix` or `--write` if user wants auto-fix. Report failures and fix or note.
+
 ## Commands
 
 - `npm run lint` or `pnpm lint` (prefer project script)

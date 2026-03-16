@@ -9,6 +9,10 @@ description: >-
 
 First-time setup for Python development.
 
+## On invoke
+
+Run steps in order. Use project root for venv creation. If project path is unclear, ask or assume current directory. Prefer uv when available.
+
 ## macOS (Homebrew)
 
 ```bash

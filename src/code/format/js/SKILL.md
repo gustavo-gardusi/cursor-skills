@@ -9,6 +9,10 @@ description: >-
 
 Format with Prettier. Check for `prettier` in package.json, `.prettierrc`, or `.prettierrc.json`.
 
+## On invoke
+
+Run from project root. Use the command for the project’s package manager (npm/pnpm/yarn). Apply format with `--write`; use `--check` only if user asks to validate without writing.
+
 ## Commands
 
 - `npx prettier --write .` (npm)

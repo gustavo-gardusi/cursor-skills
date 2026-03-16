@@ -9,6 +9,10 @@ description: >-
 
 First-time setup for Rust development.
 
+## On invoke
+
+Run steps in order. Use project root for `cargo build`. If project path is unclear, ask or assume current directory. Ensure rustfmt and clippy components are added.
+
 ## macOS (Homebrew)
 
 ```bash

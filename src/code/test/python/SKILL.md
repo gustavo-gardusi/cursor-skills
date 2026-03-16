@@ -9,6 +9,10 @@ description: >-
 
 Run tests. Check for `pytest.ini`, `pyproject.toml` [tool.pytest], or `requirements*.txt`.
 
+## On invoke
+
+Run from project root. Activate venv if present; use `pytest` (or `python -m pytest`). Report failures and fix or note.
+
 ## Commands
 
 - `pytest` or `python -m pytest`

@@ -8,6 +8,10 @@ description: >-
 
 Run tests. Check for `Cargo.toml`.
 
+## On invoke
+
+Run from project root. Use `cargo test`; add test name or package if user specifies. Report failures and fix or note.
+
 ## Command
 
 `cargo test`

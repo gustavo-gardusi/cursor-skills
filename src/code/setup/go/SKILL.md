@@ -9,6 +9,10 @@ description: >-
 
 First-time setup for Go development.
 
+## On invoke
+
+Run steps in order. Use project root for `go mod download` and `go build`. If project path is unclear, ask or assume current directory.
+
 ## macOS (Homebrew)
 
 ```bash

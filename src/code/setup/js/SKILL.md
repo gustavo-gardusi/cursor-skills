@@ -9,6 +9,10 @@ description: >-
 
 First-time setup for Node/JS development.
 
+## On invoke
+
+Run steps in order. Use project root for `pnpm install` / `npm install`. If project path is unclear, ask or assume current directory. Prefer pnpm when available.
+
 ## macOS (Homebrew)
 
 ```bash

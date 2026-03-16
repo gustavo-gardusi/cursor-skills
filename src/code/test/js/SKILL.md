@@ -9,6 +9,10 @@ description: >-
 
 Run tests. Check package.json for `test` script.
 
+## On invoke
+
+Run from project root. Prefer `npm test` (or pnpm/yarn) if script exists; else use vitest/jest per project. Report failures and fix or note.
+
 ## Commands
 
 - `npm test` or `npm run test`

@@ -29,5 +29,7 @@ Skip format/lint/test if not configured for project.
 
 ## Notes
 
-- Run from project root
-- Detect project: package.json → js, Cargo.toml → rust, pyproject.toml → python, go.mod → go
+- Run from project root.
+- Detect project: `package.json` → js, `Cargo.toml` → rust, `pyproject.toml` → python, `go.mod` → go.
+- Prerequisites: format, lint, and test tools for the detected project type (or invoke code-setup-* first).
+- Stop on first failure; do not commit or push if format, lint, or test fails.

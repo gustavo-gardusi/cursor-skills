@@ -1,17 +1,19 @@
 ---
 name: gh-pr
 description: >-
-  Sync build, format & test, commit & push, then create or update PR. Fork:
-  on main → PR to upstream; on branch → PR to upstream. Same repo: PR to main.
+  Ensure the current project works (sync, format, test), then craft or update
+  the PR. Use for creating/updating a PR—not for addressing review feedback.
 ---
 
 # PR
 
-Sync build (branch + main + upstream), run format & test, commit & push, then open or update the right PR. **Fork (upstream exists):** on main → PR from fork main to upstream main; on branch → PR from fork branch to upstream main. **Same repo:** on branch → PR to main. On main with no upstream → push only.
+**Responsibility:** Make sure the current project works, then create or update the PR. Sync build (branch + main/upstream), run format and test, commit and push, then open or update the right PR (same repo → main; fork → upstream). Does **not** address existing PR comments or review feedback—use **gh-pr-review** for that.
+
+**Fork:** on main → PR fork main to upstream main; on branch → PR fork branch to upstream main. **Same repo:** on branch → PR to main. On main with no upstream → push only.
 
 ## On invoke
 
-Start immediately. Run commands one by one. Do not summarize.
+Start immediately. Run commands one by one. Do not summarize. Focus only on project health and PR create/update.
 
 ## Workflow
 
@@ -45,5 +47,6 @@ Use diff (`main...HEAD` or `upstream/main...HEAD`) with `--name-status`.
 
 ## Notes
 
-- Run from project root. Abort merge: `git merge --abort`
-- Prerequisites: `gh` CLI, `gh auth status`
+- Run from project root. Abort merge: `git merge --abort`.
+- Prerequisites: `gh` CLI, `gh auth status`.
+- **Split:** For syncing branch with main/upstream and resolving conflicts until tests pass, use **gh-pull**. For addressing review comments and failed checks on an existing PR, use **gh-pr-review**.

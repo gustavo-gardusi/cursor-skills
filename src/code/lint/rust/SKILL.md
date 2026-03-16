@@ -8,6 +8,10 @@ description: >-
 
 Run clippy. Check for `Cargo.toml`.
 
+## On invoke
+
+Run from project root. Use `cargo clippy`; apply fixes with `cargo clippy --fix` if user wants auto-fix. Report failures and fix or note.
+
 ## Command
 
 `cargo clippy`

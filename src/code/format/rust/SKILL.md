@@ -9,6 +9,10 @@ description: >-
 
 Format with rustfmt. Check for `Cargo.toml`.
 
+## On invoke
+
+Run from project root (where `Cargo.toml` is). Use `cargo fmt` to apply; use `cargo fmt -- --check` only if user asks to check without writing.
+
 ## Command
 
 `cargo fmt`

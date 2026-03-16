@@ -8,6 +8,10 @@ description: >-
 
 Run ruff or pylint. Check `pyproject.toml` for `[tool.ruff]` or `[tool.pylint]`.
 
+## On invoke
+
+Run from project root. Prefer `ruff check .`; use `--fix` if user wants auto-fix. Report failures and fix or note.
+
 ## Commands
 
 - `ruff check .` (prefer ruff—fast, comprehensive)

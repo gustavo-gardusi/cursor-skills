@@ -8,6 +8,10 @@ description: >-
 
 Format with ruff or black. Check `pyproject.toml` for `[tool.ruff]` or `[tool.black]`.
 
+## On invoke
+
+Run from project root. Prefer ruff if configured; else black. Use `--check` only if user asks to validate without writing.
+
 ## Commands
 
 - `ruff format .` (prefer ruff—faster, includes lint)

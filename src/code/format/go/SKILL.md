@@ -8,6 +8,10 @@ description: >-
 
 Format with gofmt. Check for `go.mod`.
 
+## On invoke
+
+Run from project root (where `go.mod` is). Use `go fmt ./...` to apply; validate without writing only if user asks.
+
 ## Command
 
 `go fmt ./...`

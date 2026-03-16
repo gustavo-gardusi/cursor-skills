@@ -8,6 +8,10 @@ description: >-
 
 Run tests. Check for `go.mod`.
 
+## On invoke
+
+Run from project root. Use `go test ./...`; add `-v` for verbose, `-run TestName` for a single test. Report failures and fix or note.
+
 ## Command
 
 `go test ./...`
