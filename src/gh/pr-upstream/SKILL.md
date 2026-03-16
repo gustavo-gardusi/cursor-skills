@@ -29,11 +29,25 @@ Use `git diff upstream/main...HEAD --name-status` to categorize. Count A=added, 
 **Structure:**
 
 1. **Summary** — One short paragraph describing the overall changes of the entire PR. What was done and why. No file counts.
-2. **New files (N)** — One line per file: `path` — brief description of what it adds.
-3. **Deleted files (N)** — One line per file: `path` — brief description. End section with: "Review removals before merging."
-4. **Modified (N)** — One line per file: `path` — brief description of changes.
+2. **New files (N)** — File-tree style with **nested lists** (markdown `-` and indented `-`). Group by directory: one top-level `- dir/` per folder, then under it nested `- path` — brief description. If a folder has many files, add sub-groups (e.g. `frontend/src/components/` with nested items). Root-level files stay as top-level `- path` — description.
+3. **Deleted files (N)** — Same nested list style by directory. End section with: "Review removals before merging."
+4. **Modified (N)** — Same nested list style by directory: group by top-level (or common) path, nested `- path` — brief description.
 
-Keep all descriptions brief and direct. Use `path` — `description` format.
+**Format:** Use `path` — `description` for each file. Keep descriptions brief. Example:
+
+```markdown
+## New files
+- backend/
+  - README.md — Backend quick reference
+  - src/main/java/.../DeckRules.java — Deck validation rules
+- frontend/
+  - src/components/CardDetailModal.jsx — Card detail modal
+  - src/constants/cardImages.js — Card UI constants
+- docs/
+  - SETUP_AND_TESTS.md — Setup and run app
+  - screenshots/cards-page.png — UI screenshot
+- data/cards.csv — Sample card data
+```
 
 **Title:** One-line summary from changes (e.g. "Refactor to src/ layout, add install script").
 
