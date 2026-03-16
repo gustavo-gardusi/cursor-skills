@@ -37,9 +37,11 @@ If nothing to commit and nothing to push and we didn’t open/update a PR: say "
 
 ## PR description
 
-Use diff (`main...HEAD` or `upstream/main...HEAD`) with `--name-status`. **Emoji** sections (✨ Summary, 📁 Changes, 🔍 Review). **Bullets/tables.** Short phrases; focus on **relevant changes** and **affected files**. Include **Review:** performance, memory/space, integrations when relevant.
+Use diff (`main...HEAD` or `upstream/main...HEAD`) with `--name-status`.
 
-**Title:** One line, emoji optional.
+**Title:** One line, no emojis (plain text only).
+
+**Body:** Bullets/tables. Short phrases; focus on **relevant changes** and **affected files**. Include **Review:** performance, memory/space, integrations when relevant. Emojis in the body are fine (e.g. ✨ Summary, 📁 Changes, 🔍 Review)—use freely where they help.
 
 ## Notes
 
