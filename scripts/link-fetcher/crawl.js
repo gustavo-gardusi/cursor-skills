@@ -11,7 +11,7 @@
 
 import { fileURLToPath } from 'url';
 import { chromium } from 'playwright';
-import { readFileSync, writeFileSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { argv } from 'process';
 
 const CDP_URL = 'http://localhost:9222';
@@ -28,6 +28,8 @@ export function parseArgs(args = argv.slice(2)) {
     timeout: 30_000,
     waitUntil: 'load',
     out: null,
+    compact: false,
+    append: false,
   };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -59,6 +61,12 @@ export function parseArgs(args = argv.slice(2)) {
         break;
       case '--out':
         opts.out = args[++i];
+        break;
+      case '--compact':
+        opts.compact = true;
+        break;
+      case '--append':
+        opts.append = true;
         break;
     }
   }
@@ -92,7 +100,7 @@ export async function fetchPage(page, url, opts) {
   const result = { url, ok: false, title: null, text: null, links: [], error: null };
   try {
     const res = await page.goto(url, { waitUntil: opts.waitUntil, timeout: opts.timeout });
-    result.ok = res && res.ok();
+    result.ok = !!(res && res.ok());
     result.title = await page.title();
     try {
       const el = await page.$('body');
@@ -165,15 +173,32 @@ export async function run(opts, deps = {}) {
 
   if (browser) await browser.close();
 
-  const out = {
+  let out = {
     rounds: opts.rounds,
     perPage: opts.perPage,
     top: opts.top,
     totalFetched: allResults.length,
     results: allResults,
   };
+  const exists = deps.existsSync ?? existsSync;
+  const readFile = deps.readFileSync ?? readFileSync;
+  if (opts.append && opts.out && exists(opts.out)) {
+    try {
+      const existing = JSON.parse(readFile(opts.out, 'utf8'));
+      const prev = existing.results || [];
+      out = {
+        rounds: opts.rounds,
+        perPage: opts.perPage,
+        top: opts.top,
+        totalFetched: prev.length + allResults.length,
+        results: [...prev, ...allResults],
+      };
+    } catch {
+      /* ignore parse errors; overwrite with current run */
+    }
+  }
   if (!deps.getPage && !deps.getBrowser) {
-    const str = JSON.stringify(out, null, 2);
+    const str = opts.compact ? JSON.stringify(out) : JSON.stringify(out, null, 2);
     if (opts.out) writeFileSync(opts.out, str);
     else console.log(str);
   }

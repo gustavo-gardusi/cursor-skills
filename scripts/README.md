@@ -30,6 +30,7 @@ All of these can be run from the **repository root**:
 | **Sync skills, clear first** | `node scripts/skills/sync.js in -y` |
 | **Copy Cursor skills back to repo** | `node scripts/skills/sync.js out` |
 | **Run fetch (link-fetcher)** | `node scripts/link-fetcher/fetch.js [options] url1 [url2 ...]` |
+| **Run fetch interactive** | `node scripts/link-fetcher/interactive.js [options] <start-url>` |
 | **Run crawl (link-fetcher)** | `node scripts/link-fetcher/crawl.js [options]` |
 | **Run all tests** | `npm test --prefix scripts` |
 | **Run tests with coverage** | `npm run test:coverage --prefix scripts` |
@@ -41,6 +42,7 @@ Using npm scripts from repo root (same as above, but via package.json):
 npm run sync --prefix scripts -- in        # or: in -y
 npm run sync --prefix scripts -- out
 npm run fetch --prefix scripts -- --connect-chrome https://example.com
+npm run fetch-interactive --prefix scripts -- --connect-chrome https://example.com
 npm run crawl --prefix scripts -- --seeds "https://example.com" --rounds 1
 npm test --prefix scripts
 npm run test:coverage --prefix scripts
@@ -76,38 +78,98 @@ Syncs **skills/** ↔ **~/.cursor/skills-cursor** so Cursor Agent can use them.
 
 ## 2. Link fetcher (`link-fetcher/`)
 
-Fetches data from URLs using **Chrome** (or a launched browser). Meant to **reuse your existing Chrome** (cookies, auth) via CDP.
+Fetches data from URLs using **Chrome** (or a launched browser). Scripts attach to an existing Chrome via CDP so you reuse cookies and logins.
 
-- **fetch.js** — List of URLs → open one by one → collect title + text → JSON.
-- **crawl.js** — Seed URLs + depth (N per page, top X, Y rounds) → multi-round crawl → JSON.
+- **fetch.js** — List of URLs → open one by one → collect title + text (+ optional links) → JSON.
+- **interactive.js** — Single start URL → show top N same-site links → wait for input (1–N or q) → open chosen link; repeat. Defaults: **top 15**, **1 iteration**. Optional `--out` writes visited pages when done.
+- **crawl.js** — Seed URLs + `--per-page N --top X --rounds Y` → multi-round crawl → JSON.
 
-**Using your Chrome (reuse auth):**
+### First-time setup: Chrome profile and login
 
-1. Start Chrome with remote debugging:
+Use a **separate Chrome profile** so remote debugging works and you only log in once (or periodically when sessions expire).
+
+1. **Quit Chrome completely** (so one instance uses the profile).
+2. Start Chrome with a dedicated user-data dir and remote debugging:
    ```bash
-   # macOS
-   /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
+   # macOS – profile stored in ~/.chrome-debug-profile
+   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+     --remote-debugging-port=9222 \
+     --user-data-dir="$HOME/.chrome-debug-profile"
    ```
-2. Run from repo root (or from `scripts/` with `link-fetcher/` in the path):
+   On Linux, use the path to your Chrome binary; on Windows, use `chrome.exe` with the same flags.
+3. In that Chrome window, **log in** to any sites you need (GitHub, internal docs, etc.). The profile is saved; next time you start Chrome with the same `--user-data-dir`, you stay logged in. Re-log when cookies or sessions expire (e.g. every few weeks).
+4. Leave that Chrome window **open**. In **another terminal**, run the link-fetcher commands with `--connect-chrome`. They attach to this browser; no new window is opened by the script.
+
+### Workflow: one Chrome, many commands
+
+1. Start Chrome once (step 2 above).
+2. Run any number of commands from repo root or `scripts/`:
    ```bash
-   node scripts/link-fetcher/fetch.js --connect-chrome https://example.com
+   node scripts/link-fetcher/fetch.js --connect-chrome --links https://example.com
+   node scripts/link-fetcher/fetch.js --connect-chrome --out pages.json --compact url1 url2
+   node scripts/link-fetcher/interactive.js --connect-chrome --out visited.json https://docs.example.com
    node scripts/link-fetcher/crawl.js --connect-chrome --seeds "https://docs.example.com" --rounds 2 --out crawl.json
    ```
    Default CDP URL is `http://localhost:9222`; use `--connect-chrome http://host:port` to override.
 
-**Without Chrome:** Omit `--connect-chrome`; a Chromium window will launch (requires `npx playwright install chromium`; no existing auth).
+**Without `--connect-chrome`:** A Chromium window is launched by Playwright (no existing auth; requires `npx playwright install chromium`).
 
-**fetch.js:** `--urls-file <path>`, `--wait-until load|domcontentloaded|networkidle`, `--selector <css>`, `--timeout <ms>`, `--out <path>`.
+### Output format (agent-friendly)
 
-**crawl.js:** `--seeds "url1 url2"`, `--seeds-file <path>`, `--per-page N`, `--top X`, `--rounds Y`, `--connect-chrome [url]`, `--out <path>`.
+All scripts emit **JSON** that is easy for tools and agents to consume.
 
-Output is JSON (`fetched`/`results` or `rounds`/`totalFetched`/`results`). Used by the **research** skill.
+- **Where:** With no `--out`, JSON is printed to **stdout**. With `--out <path>`, it is written to that file. Usage/errors go to stderr.
+- **Shape:** Each source is one object in an array:
+  - **fetch.js:** `{ fetched, results }` — `results` is an array of page objects.
+  - **crawl.js:** `{ rounds, perPage, top, totalFetched, results }` — `results` is an array of page objects.
+  - **interactive.js** (with `--out`): `{ pages, totalVisited }` — `pages` is an array of page objects.
+
+Each **page object** has:
+
+| Field   | Type    | Description |
+|--------|---------|-------------|
+| `url`  | string  | Page URL. |
+| `title`| string  | Document title. |
+| `text` | string  | Main text (e.g. from `body` or `--selector`). |
+| `ok`   | boolean | HTTP success. |
+| `error`| string  | Set only on failure. |
+| `links`| array   | Optional: follow-up URLs (fetch: `links.best` when `--links`; crawl: `links`; interactive: `links`). |
+
+- **Single-line JSON (for piping / agents):** Use `--compact`. One line per run, no pretty-print.
+- **Appending runs:** Use `--out <file>` and `--append`. New results are merged into the existing file’s `results` array so you can accumulate multiple runs reliably.
+
+Examples:
+
+```bash
+# Stdout, pretty-printed (default)
+node scripts/link-fetcher/fetch.js --connect-chrome https://a.com https://b.com
+
+# File, compact (one line) – good for agents
+node scripts/link-fetcher/fetch.js --connect-chrome --out out.json --compact https://a.com
+
+# Append more URLs to an existing file
+node scripts/link-fetcher/fetch.js --connect-chrome --out out.json --append https://c.com https://d.com
+```
+
+### Options summary
+
+| Script         | Main options |
+|----------------|---------------|
+| **fetch.js**   | `--connect-chrome [url]`, `--urls-file <path>`, `--out <path>`, `--compact`, `--append`, `--wait-until`, `--selector`, `--timeout`, `--links`, `--links-limit`, `--links-same-site` / `--no-links-same-site`. |
+| **interactive.js** | `<start-url>`, `--top <n>`, `--iterations <n>`, `--out <path>`, `--compact`, `--connect-chrome [url]`, `--timeout`. |
+| **crawl.js**   | `--seeds "url1 url2"`, `--seeds-file <path>`, `--per-page N`, `--top X`, `--rounds Y`, `--connect-chrome [url]`, `--out <path>`, `--compact`, `--append`. |
+
+Used by the **research** skill.
 
 ---
 
 ## 3. Tests and coverage
 
-Tests use **mocks only** (no real Chromium). Run from repo root or from `scripts/`:
+All tests use **mocks only**: no real Chromium, no real readline, no network. Link-fetcher tests inject a fake page and (when needed) fake `existsSync` / `readFileSync` / `writeFile` so behavior is deterministic and fast.
+
+### Run tests
+
+From **repo root** or from **scripts/**:
 
 ```bash
 # From repo root
@@ -121,8 +183,22 @@ npm run test:coverage
 npm run test:coverage:check
 ```
 
-- **test** — All tests (skills + link-fetcher).
-- **test:coverage** — Same with coverage report (Node 22+).
-- **test:coverage:check** — Fails if line coverage is below 79% (target 80%).
+- **test** — Runs all tests (skills sync + link-fetcher).
+- **test:coverage** — Same with line/branch/function coverage (Node 22+).
+- **test:coverage:check** — Exits with error if line coverage is below 80%.
 
-Per-project: `npm run test:skills --prefix scripts` and `npm run test:link-fetcher --prefix scripts` (or from `scripts/`: `npm run test:skills`, `npm run test:link-fetcher`).
+Run a subset:
+
+- **Skills only:** `npm run test:skills --prefix scripts` (or `npm run test:skills` from `scripts/`).
+- **Link-fetcher only:** `npm run test:link-fetcher --prefix scripts` (or `npm run test:link-fetcher` from `scripts/`).
+
+### What the tests cover
+
+| Area | Covered |
+|------|--------|
+| **fetch.js** | `parseArgs` (URLs, `--out`, `--compact`, `--append`, `--links`, `--connect-chrome`, etc.); `fetchUrl` (success, goto failure, `res.ok()` false, null response, links extraction and throw); `run` with getPage/getBrowser mocks, output shape (`fetched`, `results`), `--compact` single-line JSON, `--append` merge and edge cases (file missing, invalid JSON). |
+| **crawl.js** | `parseArgs` (seeds, `--per-page`, `--top`, `--rounds`, `--compact`, `--append`); `isValidUrl`; `pickTopX`; `fetchPage` (success, goto failure, null response); `run` with mocks, two-round crawl, `--compact`, `--append` merge, output valid JSON. |
+| **interactive.js** | `parseInteractiveArgs` (defaults, `--top`, `--iterations`, `--out`, `--compact`, pass-through); `pageEntry` (normalized page object, with/without `links`, with `error`); `runInteractive` with getPage/askFn mocks (quit, follow link, invalid input, max depth, child fetch error, Enter = link 1, `--out` and writeFile mock, multi-page output, valid JSON). |
+| **skills/sync.js** | Path names, finding SKILL.md files, install/copy in and out with temp dirs. |
+
+Everything is exercised without starting Chrome or reading real stdin.

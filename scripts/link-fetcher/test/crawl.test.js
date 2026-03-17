@@ -54,6 +54,13 @@ describe('crawl parseArgs', () => {
     assert.strictEqual(opts.out, 'out.json');
     assert.strictEqual(opts.seeds[0], 'https://s.com');
   });
+
+  test('parses --compact and --append', () => {
+    const opts = parseArgs(['--seeds', 'https://x.com', '--out', 'crawl.json', '--compact', '--append']);
+    assert.strictEqual(opts.compact, true);
+    assert.strictEqual(opts.append, true);
+    assert.strictEqual(opts.out, 'crawl.json');
+  });
 });
 
 describe('crawl isValidUrl', () => {
@@ -114,6 +121,17 @@ describe('crawl fetchPage', () => {
     assert.ok(Array.isArray(result.links));
     assert.ok(result.links.length >= 1);
   });
+
+  test('fetchPage sets ok false when response is null', async () => {
+    const mockPage = {
+      goto: () => Promise.resolve(null),
+      title: () => Promise.resolve(''),
+      $: () => Promise.resolve({ innerText: () => Promise.resolve('') }),
+      $$eval: () => Promise.resolve([]),
+    };
+    const result = await fetchPage(mockPage, 'http://example.com', { waitUntil: 'load', timeout: 5000, perPage: 5 });
+    assert.strictEqual(result.ok, false);
+  });
 });
 
 describe('crawl run (regression)', () => {
@@ -161,5 +179,105 @@ describe('crawl run (regression)', () => {
     const out = await run(opts, { getBrowser: async () => mockBrowser });
     assert.strictEqual(out.totalFetched, 1);
     assert.strictEqual(out.results[0].title, 'Crawl getBrowser');
+  });
+
+  test('run with --compact returns object suitable for single-line JSON', async () => {
+    const mockPage = {
+      goto: () => Promise.resolve({ ok: () => true }),
+      title: () => Promise.resolve('Crawl'),
+      $: () => Promise.resolve({ innerText: () => Promise.resolve('') }),
+      $$eval: () => Promise.resolve([]),
+    };
+    const opts = parseArgs(['--seeds', 'https://seed.com', '--rounds', '1', '--compact']);
+    const out = await run(opts, { getPage: async () => mockPage });
+    const oneLine = JSON.stringify(out);
+    assert.ok(!oneLine.includes('\n'));
+    const parsed = JSON.parse(oneLine);
+    assert.strictEqual(parsed.totalFetched, 1);
+    assert.ok(Array.isArray(parsed.results));
+  });
+
+  test('run with --out and --append merges into existing file', async () => {
+    const existing = {
+      rounds: 1,
+      perPage: 10,
+      top: 20,
+      totalFetched: 1,
+      results: [{ url: 'https://first.com', title: 'First', text: 'x', ok: true, links: [] }],
+    };
+    const mockPage = {
+      goto: () => Promise.resolve({ ok: () => true }),
+      title: () => Promise.resolve('Second'),
+      $: () => Promise.resolve({ innerText: () => Promise.resolve('y') }),
+      $$eval: () => Promise.resolve([]),
+    };
+    const opts = parseArgs(['--seeds', 'https://second.com', '--rounds', '1', '--out', '/any/crawl.json', '--append']);
+    const out = await run(opts, {
+      getPage: async () => mockPage,
+      existsSync: () => true,
+      readFileSync: () => JSON.stringify(existing),
+    });
+    assert.strictEqual(out.totalFetched, 2);
+    assert.strictEqual(out.results.length, 2);
+    assert.strictEqual(out.results[0].url, 'https://first.com');
+    assert.strictEqual(out.results[1].url, 'https://second.com');
+  });
+
+  test('run with --append but file does not exist returns current run only', async () => {
+    const mockPage = {
+      goto: () => Promise.resolve({ ok: () => true }),
+      title: () => Promise.resolve('Only'),
+      $: () => Promise.resolve({ innerText: () => Promise.resolve('') }),
+      $$eval: () => Promise.resolve([]),
+    };
+    const opts = parseArgs(['--seeds', 'https://only.com', '--rounds', '1', '--out', '/nonexistent.json', '--append']);
+    const out = await run(opts, { getPage: async () => mockPage, existsSync: () => false });
+    assert.strictEqual(out.totalFetched, 1);
+    assert.strictEqual(out.results[0].url, 'https://only.com');
+  });
+
+  test('run with two rounds fetches seeds then next links up to top', async () => {
+    const urlsSeen = [];
+    const mockPage = {
+      goto: (url) => {
+        urlsSeen.push(url);
+        return Promise.resolve({ ok: () => true });
+      },
+      title: () => Promise.resolve('Page'),
+      $: () => Promise.resolve({ innerText: () => Promise.resolve('') }),
+      $$eval: (_sel, fn, lim) => {
+        const last = urlsSeen[urlsSeen.length - 1];
+        const links =
+          last === 'https://seed1.com'
+            ? ['https://child1.com', 'https://child2.com']
+            : last === 'https://seed2.com'
+              ? ['https://child3.com']
+              : [];
+        return Promise.resolve(fn(links.map((href) => ({ href })), lim));
+      },
+    };
+    const opts = parseArgs(['--seeds', 'https://seed1.com https://seed2.com', '--rounds', '2', '--per-page', '5', '--top', '3']);
+    const out = await run(opts, { getPage: async () => mockPage });
+    assert.strictEqual(out.rounds, 2);
+    assert.strictEqual(out.totalFetched, 5);
+    assert.strictEqual(out.results.length, 5);
+    assert.strictEqual(out.results[0].url, 'https://seed1.com');
+    assert.strictEqual(out.results[1].url, 'https://seed2.com');
+  });
+
+  test('run output is valid JSON when serialized', async () => {
+    const mockPage = {
+      goto: () => Promise.resolve({ ok: () => true }),
+      title: () => Promise.resolve('T'),
+      $: () => Promise.resolve({ innerText: () => Promise.resolve('') }),
+      $$eval: () => Promise.resolve([]),
+    };
+    const opts = parseArgs(['--seeds', 'https://s.com', '--rounds', '1']);
+    const out = await run(opts, { getPage: async () => mockPage });
+    const str = JSON.stringify(out);
+    assert.doesNotThrow(() => JSON.parse(str));
+    const parsed = JSON.parse(str);
+    assert.strictEqual(parsed.totalFetched, 1);
+    assert.strictEqual(parsed.results[0].url, 'https://s.com');
   });
 });

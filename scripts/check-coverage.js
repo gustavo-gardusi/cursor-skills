@@ -19,6 +19,7 @@ const result = spawnSync(
     'skills/test/sync.test.js',
     'link-fetcher/test/fetch.test.js',
     'link-fetcher/test/crawl.test.js',
+    'link-fetcher/test/interactive.test.js',
   ],
   {
     cwd: __dirname,
