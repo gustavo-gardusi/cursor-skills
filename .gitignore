@@ -7,3 +7,5 @@ node_modules/
 scripts/node_modules/
 scripts/link-fetcher/node_modules/
 scripts/skills/node_modules/
+# Cursor / link-fetcher temp output dirs (e.g. lf-fetch-<random>)
+scripts/lf-fetch-*/

@@ -38,6 +38,7 @@ Compare README (and any other main docs) to the current repo. Apply minimal edit
 
 ### 3. Summarized commit and push to current branch
 
+- **Clean temp dirs** — Remove any temporary output dirs that should not be committed (e.g. `scripts/lf-fetch-*/` from link-fetcher runs). Use a random temp path for any one-off output during this run, then delete it so the working tree has no leftover temp dirs.
 - **Stage** — `git add .` (or stage relevant paths if the user prefers).
 - **Message** — One short line summarizing the change (e.g. from `git diff --stat` or a brief summary).
 - **Commit** — `git commit -m "<summary>"`.
