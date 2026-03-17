@@ -80,6 +80,43 @@ Syncs **skills/** ↔ **~/.cursor/skills-cursor** so Cursor Agent can use them.
 
 Fetches data from URLs using **Chrome** (or a launched browser). Scripts attach to an existing Chrome via CDP so you reuse cookies and logins.
 
+### Use from another repo
+
+You can run the link-fetcher from **any repo** (e.g. in Cursor chat from a different project) to gather context from URLs:
+
+1. **Clone this repo** (cursor-skills) somewhere, e.g. `~/github/cursor-skills`.
+2. **Install deps** in the clone: `npm install --prefix scripts` (from repo root).
+3. **Set** `CURSOR_SKILLS_REPO` to that path, e.g. `export CURSOR_SKILLS_REPO=~/github/cursor-skills`.
+4. From the other repo, the **research-append** skill (when installed from cursor-skills) will run:
+   - `node "$CURSOR_SKILLS_REPO/scripts/link-fetcher/fetch.js" ...` or
+   - `node "$CURSOR_SKILLS_REPO/scripts/link-fetcher/crawl.js" ...`
+   so you get the same Chrome-based fetch/crawl without copying the script.
+
+Example (BFS: seeds + distance 1 + distance 2, output to `.cursor/`):
+
+```bash
+mkdir -p .cursor
+node "$CURSOR_SKILLS_REPO/scripts/link-fetcher/crawl.js" --connect-chrome --seeds "https://example.com/doc" --per-page 10 --top 15 --rounds 3 --out .cursor/research-context.json --visited-file .cursor/research-visited.txt --compact
+```
+
+### Partial context storage (`.cursor/`)
+
+Research skills use **`.cursor/`** for ephemeral output (readable by Cursor, not part of the repo; add `.cursor/` to `.gitignore`). **Only research-append** may change the context file; **research-plan** only reads it and writes the plan file; **research-execute** only reads the plan and changes the repo.
+
+- **`.cursor/research-context.json`** — Written **only by research-append** (fetch/crawl output). Should include a top-level **`lastFetched`** (ISO timestamp). Use `--append` to merge new results; if `lastFetched` is older than a reasonable threshold (e.g. 24h), re-fetch to update. **research-plan** reads this (read-only) to craft plans.
+- **`.cursor/research-visited.txt`** — Optional: use **`--visited-file .cursor/research-visited.txt`** so the fetcher skips URLs already visited in previous runs (one URL per line). Append writes this; plan and execute do not use it.
+- **`.cursor/research-plan.md`** — Written by **research-plan** (implementation plan with file paths). **research-execute** reads this and applies the plan to the repo. Plan does not modify the context file.
+
+When running the fetcher manually: `--out .cursor/research-context.json` (and `--append` to add to existing), `--visited-file .cursor/research-visited.txt` to skip already-visited URLs; create `.cursor/` with `mkdir -p .cursor` if needed.
+
+### Research skills ↔ link-fetcher
+
+| Skill | Scripts / behavior |
+|-------|--------------------|
+| **research-append** | Uses **fetch.js** (seeds only: `--out`, `--visited-file`, `--append`, `--compact`, `--connect-chrome`, URLs as args or `--urls-file`) or **crawl.js** (BFS: `--seeds` / `--seeds-file`, `--per-page N`, `--top X`, `--rounds Y`, same flags). Writes `.cursor/research-context.json` (and optionally `.cursor/research-visited.txt`). Script output shape: `{ results: [ { url, title, text, ok, error?, links? } ] }` (crawl also has `rounds`, `perPage`, `top`, `totalFetched`). Append adds `lastFetched` (ISO) to the context file after the run. |
+| **research-plan** | Does **not** run link-fetcher. Reads `.cursor/research-context.json` (read-only) and the repo (read-only). Writes `.cursor/research-plan.md` only. |
+| **research-execute** | Does **not** run link-fetcher. Reads `.cursor/research-plan.md` and applies the plan to the repo (edits source/config). |
+
 - **fetch.js** — List of URLs → open one by one → collect title + text (+ optional links) → JSON.
 - **interactive.js** — Single start URL → show top N same-site links → wait for input (1–N or q) → open chosen link; repeat. Defaults: **top 15**, **1 iteration**. Optional `--out` writes visited pages when done.
 - **crawl.js** — Seed URLs + `--per-page N --top X --rounds Y` → multi-round crawl → JSON.

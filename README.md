@@ -3,7 +3,7 @@
 This repo holds **Cursor IDE agent skills**: markdown instructions the agent can follow (e.g. “create a PR”, “format Go”, “research a task”). You use them in chat with **/skill-name** or **@skill-name**.
 
 - **Skills** live in **`skills/`** (one `SKILL.md` per skill). To install them into Cursor, run from repo root: **`node scripts/skills/sync.js in`**. To copy edits from Cursor back into the repo: **`node scripts/skills/sync.js out`**.
-- **Scripts** live in **`scripts/`**: the same sync tool plus a **link-fetcher** (Chrome-based URL fetch/crawl for the research skill). Full docs, usage, and testing are in **[scripts/README.md](scripts/README.md)** — that’s the single place for how to run sync, how to use the fetcher with your Chrome (reuse auth), and how to run tests (mocks only, no browser required) and coverage (≥80% line).
+- **Scripts** live in **`scripts/`**: the same sync tool plus a **link-fetcher** (Chrome-based URL fetch/crawl for the **research-append** skill). Full docs, usage, and testing are in **[scripts/README.md](scripts/README.md)** — including [how to use the link-fetcher from another repo](scripts/README.md#use-from-another-repo) (set `CURSOR_SKILLS_REPO`).
 
 ---
 
@@ -19,53 +19,15 @@ This repo holds **Cursor IDE agent skills**: markdown instructions the agent can
 | **gh-pr-review** | Load PR comments and failed checks; fix each with minimal changes scoped to the PR diff. |
 | **gh-push** | Run format, lint, and tests; then make a summarized commit and push on the current branch. |
 
-### Research
+### Research (three skills under `skills/research/`)
+
+Three-step workflow: **append** (fetch links → context file) → **plan** (read context + repo → plan file) → **execute** (read plan → change repo). Append and plan **do not change the repo**—they only read/write **`.cursor/`** (ephemeral; add `.cursor/` to `.gitignore`). Only **research-append** may change the context file; only **research-execute** modifies the codebase.
 
 | Skill | What it does |
 |-------|----------------|
-| **research** | Research a task against the repo: optional link crawl (N per page, top X, Y rounds), consolidate docs/tickets, compare impact on the codebase, and output an implementation plan (read-only; no code edits). |
-
-### Code — format
-
-| Skill | What it does |
-|-------|----------------|
-| **code-format-js** | Format JS/TS/CSS/JSON with Prettier. |
-| **code-format-rust** | Format Rust with rustfmt / cargo fmt. |
-| **code-format-python** | Format Python with ruff or black. |
-| **code-format-go** | Format Go with gofmt. |
-
-### Code — lint
-
-| Skill | What it does |
-|-------|----------------|
-| **code-lint-js** | Lint JS/TS with ESLint or Biome. |
-| **code-lint-rust** | Lint Rust with clippy. |
-| **code-lint-python** | Lint Python with ruff or pylint. |
-| **code-lint-go** | Lint Go with go vet or staticcheck. |
-
-### Code — test
-
-| Skill | What it does |
-|-------|----------------|
-| **code-test-js** | Run the JS/Node test suite (npm/yarn/pnpm). |
-| **code-test-rust** | Run Rust tests with cargo. |
-| **code-test-python** | Run Python tests with pytest. |
-| **code-test-go** | Run Go tests. |
-
-### Code — setup
-
-| Skill | What it does |
-|-------|----------------|
-| **code-setup-js** | First-time JS/Node setup (Node, pnpm, etc.). |
-| **code-setup-rust** | First-time Rust setup (rustup, cargo). |
-| **code-setup-python** | First-time Python setup (Python, venv). |
-| **code-setup-go** | First-time Go setup (install Go, env). |
-
-### Code — ship
-
-| Skill | What it does |
-|-------|----------------|
-| **code-ship** | Format, lint, test, then add, commit, and push in one flow. |
+| **research-append** | Fetch-only: receive links, run a **BFS** in Chrome (N best at distance 1, then N best at distance 2) via `scripts/link-fetcher` (fetch.js or crawl.js). Write or merge into **`.cursor/research-context.json`** with timestamps; use `--visited-file .cursor/research-visited.txt` to skip already-visited URLs. Does not modify the repo. |
+| **research-plan** | Read **`.cursor/research-context.json`** (read-only) and the repo (read-only). Craft a plan of what can be done and what to do; write **`.cursor/research-plan.md`** only. Re-running overwrites the plan file; never touches the context file or the repo. |
+| **research-execute** | Read **`.cursor/research-plan.md`** and apply the implementation plan: run one-off commands, add/change/update files. Only the repo is modified; does not edit `.cursor/`. Use after the plan is done. |
 
 ---
 
@@ -73,7 +35,7 @@ This repo holds **Cursor IDE agent skills**: markdown instructions the agent can
 
 1. Clone the repo.
 2. Install skills into Cursor: **`node scripts/skills/sync.js in`** (from repo root).
-3. In Cursor Agent chat, use **/gh-pr** or **@research** (etc.) to invoke a skill.
-4. For script details (sync options, link-fetcher, Chrome, tests): **[scripts/README.md](scripts/README.md)**.
+3. In Cursor Agent chat, use **/gh-pr** or **@research-append** / **@research-plan** / **@research-execute** (etc.) to invoke a skill.
+4. For script details (sync, link-fetcher, Chrome, research workflow, tests): **[scripts/README.md](scripts/README.md)**.
 
 To add or edit skills: change **`skills/…/SKILL.md`** (frontmatter **name: skill-name**), then run **`node scripts/skills/sync.js in`** again.
