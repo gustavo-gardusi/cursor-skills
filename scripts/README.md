@@ -84,9 +84,9 @@ Fetches data from URLs using **Chrome** (or a launched browser). Scripts attach 
 
 You can run the link-fetcher from **any repo** (e.g. in Cursor chat from a different project) to gather context from URLs:
 
-1. **Clone this repo** (cursor-skills) somewhere, e.g. `~/github/cursor-skills`.
+1. **Clone this repo** (cursor-skills) somewhere, e.g. `~/github/personal/cursor-skills`. The **repo root** is the directory that contains **`scripts/`**.
 2. **Install deps** in the clone: `npm install --prefix scripts` (from repo root).
-3. **Set** `CURSOR_SKILLS_REPO` to that path, e.g. `export CURSOR_SKILLS_REPO=~/github/cursor-skills`.
+3. **Set** `CURSOR_SKILLS_REPO` to the **absolute path** of that clone (the repo root). See the main [README — Initial setup](../README.md#initial-setup-run-once): use `export CURSOR_SKILLS_REPO=/path/to/cursor-skills` in your shell (or add to `~/.zshrc`), or copy **`.env.example`** to **`.env`** in the clone and set `CURSOR_SKILLS_REPO` there.
 4. From the other repo, the **research-append** skill (when installed from cursor-skills) will run:
    - `node "$CURSOR_SKILLS_REPO/scripts/link-fetcher/fetch.js" ...` or
    - `node "$CURSOR_SKILLS_REPO/scripts/link-fetcher/crawl.js" ...`

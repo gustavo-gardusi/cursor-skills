@@ -11,3 +11,5 @@ scripts/skills/node_modules/
 scripts/lf-fetch-*/
 # Cursor ephemeral context (research-context.json, etc.); not part of repo, safe to delete
 .cursor/
+# Local env (copy from .env.example and set CURSOR_SKILLS_REPO)
+.env

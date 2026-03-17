@@ -1,9 +1,31 @@
 # Cursor Skills
 
-This repo holds **Cursor IDE agent skills**: markdown instructions the agent can follow (e.g. “create a PR”, “format Go”, “research a task”). You use them in chat with **/skill-name** or **@skill-name**.
+This repo holds **Cursor IDE agent skills**: markdown instructions the agent can follow (e.g. “create a PR”, “research a task”). You use them in chat with **/skill-name** or **@skill-name**.
 
 - **Skills** live in **`skills/`** (one `SKILL.md` per skill). To install them into Cursor, run from repo root: **`node scripts/skills/sync.js in`**. To copy edits from Cursor back into the repo: **`node scripts/skills/sync.js out`**.
-- **Scripts** live in **`scripts/`**: the same sync tool plus a **link-fetcher** (Chrome-based URL fetch/crawl for the **research-append** skill). Full docs, usage, and testing are in **[scripts/README.md](scripts/README.md)** — including [how to use the link-fetcher from another repo](scripts/README.md#use-from-another-repo) (set `CURSOR_SKILLS_REPO`).
+- **Scripts** live in **`scripts/`**: the same sync tool plus a **link-fetcher** (Chrome-based URL fetch/crawl for the **research-append** skill). Full docs: **[scripts/README.md](scripts/README.md)**.
+
+---
+
+## Initial setup (run once)
+
+From the **repo root** (the directory that contains **`scripts/`**), e.g. `/Users/gustavogardusi/github/personal/cursor-skills`:
+
+```bash
+# 1. Install script dependencies (Node LTS)
+npm install --prefix scripts
+
+# 2. Install skills into Cursor (add/overwrite)
+node scripts/skills/sync.js in
+# Or clear existing skills first: node scripts/skills/sync.js in -y
+```
+
+**Using research-append from another repo?** Set **`CURSOR_SKILLS_REPO`** to the **absolute path of this repo** (the folder that contains `scripts/`), so the agent can run the link-fetcher scripts:
+
+- **Option A — Shell:** `export CURSOR_SKILLS_REPO=/path/to/cursor-skills` (add to `~/.zshrc` or `~/.bashrc` to persist).
+- **Option B — .env:** Copy **`.env.example`** to **`.env`** in this repo, set `CURSOR_SKILLS_REPO=/path/to/cursor-skills`. If Cursor/your IDE loads `.env` from the workspace, the agent will see it when you open another project; otherwise use Option A.
+
+When your Cursor **workspace is this repo**, you don’t need `CURSOR_SKILLS_REPO`; the skills use `scripts/link-fetcher` from the workspace root.
 
 ---
 
@@ -33,9 +55,19 @@ Three-step workflow: **append** (fetch links → context file) → **plan** (rea
 
 ## Quick start
 
-1. Clone the repo.
-2. Install skills into Cursor: **`node scripts/skills/sync.js in`** (from repo root).
-3. In Cursor Agent chat, use **/gh-pr** or **@research-append** / **@research-plan** / **@research-execute** (etc.) to invoke a skill.
-4. For script details (sync, link-fetcher, Chrome, research workflow, tests): **[scripts/README.md](scripts/README.md)**.
+1. **Initial setup** (once): see [Initial setup (run once)](#initial-setup-run-once) above.
+2. In Cursor Agent chat, use **/gh-pr** or **@research-append** / **@research-plan** / **@research-execute** (etc.) to invoke a skill.
+3. Script details (sync, link-fetcher, Chrome, research workflow, tests): **[scripts/README.md](scripts/README.md)**.
 
 To add or edit skills: change **`skills/…/SKILL.md`** (frontmatter **name: skill-name**), then run **`node scripts/skills/sync.js in`** again.
+
+---
+
+## What to run right now (summary)
+
+| When | Commands (from repo root) |
+|------|----------------------------|
+| **First time in this repo** | `npm install --prefix scripts` → `node scripts/skills/sync.js in` |
+| **Use research-append from another repo** | Set `CURSOR_SKILLS_REPO` to this repo’s path (e.g. `export CURSOR_SKILLS_REPO=/Users/gustavogardusi/github/personal/cursor-skills`), or copy `.env.example` to `.env` and set it there |
+| **Reinstall skills after editing** | `node scripts/skills/sync.js in` |
+| **Run tests** | `npm test --prefix scripts` |
