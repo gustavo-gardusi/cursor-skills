@@ -30,20 +30,20 @@ Start immediately. Run commands one by one. Do not summarize. Focus only on: (1)
 
 ## PR description
 
-Use the diff from step 3 (`base...HEAD`, `--name-status`). Write a **strong description**: emoji for section headers, **bullet points with nested lists** in Summary, **tables** for Impact, **bold** for important points, clear **memory/CPU** in Review. Keep **Changes** quite low (brief, last).
+Use the diff from step 3 (`base...HEAD`, `--name-status`). Write a **strong description**: emoji for section headers, **bullet points with nested lists** in Summary, **bold** for important points. **Omit optional sections** when they add no value (see below). Focus on **what's unique to this repo or change** — things reviewers should notice or do (breaking changes, config, migration, removals, deployment).
 
 ### Structure (order)
 
-1. **✨ Summary** — **Bullet points with nested lists** (not a single paragraph). Top-level bullets for main points; nest sub-points or details underneath. **Bold** the main goal or outcome. Example shape:
+1. **✨ Summary** — **Bullet points with nested lists** (not a single paragraph). Top-level bullets for main points; nest sub-points or details underneath. **Bold** the main goal or outcome. Call out anything **repo-specific** that matters (e.g. "Skills now live under \`skills/\`; sync command changed," "New env var \`X\` required").
    - **Main outcome** — one line
      - Detail or scope
      - Another detail
    - What else changed
      - Sub-point
 
-2. **📊 Impact** — Short table for major metrics (**Memory**, **CPU**, **Latency**). Columns e.g. Area | Change | Note. When relevant; omit if no meaningful impact.
+2. **📊 Impact** — *Optional.* Short table for major metrics (**Memory**, **CPU**, **Latency**). Columns e.g. Area | Change | Note. **Omit this section entirely** when there is no meaningful runtime or performance impact (e.g. docs-only, tooling-only, config-only PRs).
 
-3. **🔍 Review** — **Affirmations about memory and CPU**: **improved**, **worse**, or **unchanged** in short bullets (e.g. **Memory: Lower** — fewer allocations; **CPU: Worse** — new validation on hot path). If no meaningful change: **Memory/CPU:** No significant change.
+3. **🔍 Review** — *Optional.* **Affirmations about memory and CPU**: **improved**, **worse**, or **unchanged** in short bullets (e.g. **Memory: Lower** — fewer allocations; **CPU: Worse** — new validation on hot path). **Omit this section entirely** when there is no significant memory/CPU change; do not add a filler line like "No significant change."
 
 4. **📁 Changes** — Keep **quite low**: brief nested path list by directory (Added / Modified / Deleted). One level of nesting is enough; avoid long file lists. End Deleted with: ⚠️ *Review removals before merging.*
 
@@ -51,11 +51,11 @@ Use the diff from step 3 (`base...HEAD`, `--name-status`). Write a **strong desc
 
 ### Format notes
 
-- **Summary:** Prefer bullets + nested lists over a block paragraph.
-- **Changes:** Short and last; don’t let the file list dominate the description.
-- **Bold:** Important terms (**Breaking change**, **Performance**, **Memory**, **CPU**).
+- **Summary:** Prefer bullets + nested lists; highlight **unique or important** aspects for this repo (breaking changes, migration, config, deployment).
+- **Changes:** Short and last; don't let the file list dominate.
+- **Bold:** Important terms (**Breaking change**, **Performance**, **Memory**, **CPU**, config names, etc.).
 - **Emoji:** Section headers (✨ 📊 🔍 📁); keep title plain.
-- **Memory/CPU:** At least one clear affirmation in Review.
+- **Impact / Review:** Include only when they add real information. Omit both for docs, tooling, or non-runtime changes.
 
 ---
 
