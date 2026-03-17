@@ -1,38 +1,69 @@
 ---
 name: gh-pull
 description: >-
-  Sync branch with main and/or upstream: merge, resolve conflicts, then get
-  tests passing again. Use when pulling, syncing with main, or updating from
-  upstream.
+  Pull changes into the current branch from origin and optionally from a parent
+  branch (main or upstream/main); resolve any merge conflicts by preserving
+  main's code and adapting the branch's new code. Use when syncing with remote,
+  updating from main/upstream, or after a merge left conflicts.
 ---
 
-# Pull
+# Pull (and resolve merge conflicts)
 
-**Responsibility:** Merge current branch with main and/or upstream; focus on resolving conflicts; then keep going until tests pass again. Does **not** create or update PRs (use **gh-pr**) or address PR review comments (use **gh-pr-review**).
+**Responsibility:** Update the current branch by pulling from origin and, when relevant, merging from a parent branch (main or upstream/main). If any merge produces conflicts, resolve them by preserving main’s version and adapting the branch’s new code so the result compiles and is consistent. Does **not** run tests/builds. Does **not** create or update PRs (use **gh-pr**) or address PR review (use **gh-pr-review**).
 
-Update current branch from origin, then merge `main` and/or `upstream/main` as applicable. Resolve all conflicts. After push, run the project’s test (and format/lint if quick); if anything fails, fix and re-run until tests pass or report what remains.
+**Conflict principle:** Do not change code that exists in main. Keep received changes (from main) as-is. Prefer modifying the branch’s new code so it integrates with main, rather than overwriting or removing main’s code.
 
 ## On invoke
 
-Start immediately. Run commands one by one. Do not summarize. Focus on merge, conflict resolution, and getting to a passing state.
+Start immediately. Run commands one by one. Do not summarize. First do fetch and merge; if a merge hits conflicts, resolve them (preserve main, adapt branch), then continue.
 
 ## Workflow
 
-1. **Branch** — `BRANCH=$(git branch --show-current)`.
+### 1. Branch
 
-2. **Pull current branch** — `git fetch origin`, then `git merge origin/$BRANCH` (or `git pull origin $BRANCH`). If branch has no remote yet, skip the merge. **Resolve conflicts**; complete the merge before continuing.
+`BRANCH=$(git branch --show-current)`.
 
-3. **Merge main** — If `$BRANCH` is not `main`: `git merge origin/main`. **Resolve conflicts.** (If on main, skip.)
+### 2. Fetch
 
-4. **Merge upstream** — If upstream exists: `git remote get-url upstream`; if missing, try `gh repo view --json parent -q '.parent.owner.login + "/" + .parent.name'` and add upstream. If upstream exists: `git fetch upstream`, `git merge upstream/main`. **Resolve conflicts.**
+`git fetch origin`. If upstream is configured: `git fetch upstream` (if missing, optionally add it via `gh repo view --json parent -q '.parent.owner.login + "/" + .parent.name'` and `git remote add upstream ...`).
 
-5. **Push** — If any merge was done (steps 3 or 4): `git push origin $BRANCH`.
+### 3. Pull current branch
 
-6. **Tests (and format/lint) pass** — From project root, run the project’s format (if fast), lint (if fast), and test (e.g. `cargo test`, `go test ./...`, `npm test`, `pytest`). If any fail: fix in the changed/conflicted files, commit, push, then re-run. **Repeat until tests pass** or report what still fails and what was tried.
+Merge from origin: `git merge origin/$BRANCH` (or `git pull origin $BRANCH`). If the branch has no remote tracking branch yet, skip. If conflicts occur, go to **Resolve conflicts** below, then continue to step 4.
+
+### 4. Merge parent (main)
+
+If `$BRANCH` is not `main`: `git merge origin/main`. If conflicts occur, go to **Resolve conflicts** below, then continue to step 5.
+
+### 5. Merge parent (upstream)
+
+If upstream exists: `git merge upstream/main`. If conflicts occur, go to **Resolve conflicts** below.
+
+### Resolve conflicts
+
+When any merge leaves unmerged paths:
+
+1. **Confirm merge in progress** — `git status` must show “You have unmerged paths” or list conflicted files.
+
+2. **List conflicted files** — `git diff --name-only --diff-filter=U` (or `git status`). Work through each file.
+
+3. **Resolve each conflict:**
+   - **Prefer main’s side:** In each conflict block, treat the incoming (main) version as the source of truth. Keep it intact.
+   - **Adapt branch code:** Where the branch added or changed code, keep that logic but move or adjust it so it fits with main’s version (e.g. add imports, update call sites, place new code in the right spot). Do not delete or replace main’s changes to “win” the conflict.
+   - **Remove conflict markers** (`<<<<<<<`, `=======`, `>>>>>>>`) and leave a single, coherent version that preserves main and integrates the branch’s additions.
+
+4. **Stage resolved files** — `git add <file>` for each resolved file.
+
+5. **Complete merge** — When all conflicts are resolved: `git status` to confirm no unmerged paths, then `git commit` (no extra flags; use the default merge message unless the user asks otherwise).
+
+Then continue from the step that triggered the conflict (e.g. after merging main, continue to step 5; after merging upstream, you’re done).
 
 ## Notes
 
 - Run from project root.
-- Use merge (not rebase). To abort: `git merge --abort`.
-- Prerequisites: git; optional `gh` for adding upstream from parent when missing.
-- **Split:** For creating/updating a PR after the branch is ready, use **gh-pr**. For fixing review comments and CI on an existing PR, use **gh-pr-review**.
+- Use merge (not rebase). To abort a merge: `git merge --abort`.
+- Prerequisites: git; optional `gh` for discovering and adding upstream.
+- **Ours vs theirs:** During a merge *into* the current branch, “ours” = current branch, “theirs” = main. Prefer “theirs” for existing/main code; change “ours” to integrate.
+- To see main’s version of a conflicted file: `git show :3:path/to/file` (merge stages: 1 = base, 2 = ours = current branch, 3 = theirs = main). Verify with `git ls-files -u`.
+- If resolution is ambiguous (e.g. both sides rewrote the same logic), keep main’s behavior and reimplement the branch’s intent in the new code only.
+- **No tests/builds:** This skill only pulls, merges, and resolves conflicts; use **gh-pr** or **gh-pr-review** for CI/test flows.

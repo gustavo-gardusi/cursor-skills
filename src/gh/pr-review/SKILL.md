@@ -1,205 +1,122 @@
 ---
 name: gh-pr-review
 description: >-
-  Review an existing PR: get the most data from the PR and any extra links,
-  then fix every situation (comments, checks, local standards) until done.
+  Fetch PR data from GitHub, compare current code with required changes.
+  Consolidate each comment: what it says, how code looks now, why it's wrong
+  (or wrong assumption). Address each so current code matches expectations. No
+  sync, no running format/lint/test.
 ---
 
 # PR review
 
-**Responsibility:** Get the **most data possible** from the existing PR and any additional links (task, issue, pasted logs). Then **keep trying until every situation is fixed**: all comments addressed, all CI and local checks passing. Does **not** create or update the PR (use **gh-pr**) or merge main/upstream (use **gh-pull**).
+**Responsibility:** Fetch all data from the existing PR (comments, failed checks) via `gh`. **Compare current code with what the comments require.** For each comment: consolidate into a single list entry—**what the comment says**, **how the code looks right now**, **why it’s wrong** (or that the comment may be a **wrong assumption**). Evaluate whether the comment actually needs a change; then address it so the current code matches the expected result. Does **not** sync with main/upstream (use **gh-pull**) or run format/lint/test (other skills). Does **not** create or update the PR (use **gh-pr**).
 
-Gather all comments (by section/file), failed checks, and run local standards (format, lint, test). Address each item with minimal, scoped changes. Scope edits to **files in the PR diff** (main or upstream/main). **Iterate:** after applying fixes, re-run local standards and re-check; repeat until all pass or no further progress.
+**Goal:** Compare current code with required changes and address each comment so the code is up to the expected results. **Touch only changed code**—avoid updating existing, previously working code. Stay focused on what matters for the current task. Do not run code or make it “perfect”; other skills handle that.
 
 ## On invoke
 
-Run steps in order. Use the repo that contains the PR (clone or `gh pr view` with full URL). Prefer running from the PR’s repo root. **Additional links:** If the user provides task/issue URLs or pasted content, treat as extra context—fold into comments or check errors and include in the summary.
+Run steps in order. Use the repo that contains the PR (current branch = PR head when possible). Focus only on: fetching PR data, comparing code to comments, consolidating the list, evaluating each comment, and proposing/applying the minimal change per comment.
 
 ---
 
-## Step 1 — Resolve PR and base branch
+## Step 1 — Resolve PR and base
 
-- **PR:** From user message (e.g. PR URL or number). If only a number, use current repo. If URL, e.g. `https://github.com/OWNER/REPO/pull/N`, set `OWNER/REPO` and `N`.
-- **Base:** If repo has upstream: base = `upstream/main`, else `main`. Same base used later for diff and scope.
-- **Commands:**  
-  `git remote get-url upstream` (if present).  
-  `gh pr view <PR number or URL> --json baseRefName,headRefName,number,title,body,url`
+- **PR:** From user message (PR URL or number). If URL, set `OWNER/REPO` and `NUMBER`. If only number, use current repo.
+- **Base:** `git remote get-url upstream` → if present, base = `upstream/main`, else base = `main`. Used for diff/scope only (no fetch or merge).
+- **Commands:** `gh pr view <PR> --json baseRefName,headRefName,number,title,body,url`
 
 ---
 
-## Step 2 — Gather all comments (by section)
+## Step 2 — Gather all comments from the PR
 
-Fetch every source of comments so each can be tied to a section (file/path or “general”).
+Fetch every source of comments and attach a section (General, Review, or path:line).
 
-**2a. Top-level PR comments (Conversation tab)**  
-`gh pr view <PR> --json comments -q '.comments[] | "\(.author.login): \(.body)"'`  
-Or full JSON: `gh pr view <PR> --json comments`  
-→ Section: **General** (or “PR conversation”).
+**2a. Top-level comments** — `gh pr view <PR> --json comments` → section **General**.
 
-**2b. Review summaries (e.g. “Request changes”, “Approve”)**  
-`gh pr view <PR> --json reviews`  
-→ For each review with a non-empty `body`, section: **Review (by <author>)**.
+**2b. Review bodies** — `gh pr view <PR> --json reviews` → for each non-empty `body`, section **Review (by @author)**.
 
-**2c. Inline / review comments (on diff)**  
-`gh api repos/OWNER/REPO/pulls/NUMBER/comments` (or `gh api "repos/{owner}/{repo}/pulls/{pull_number}/comments"` with owner/repo from PR)  
-→ Each has `path`, `line` (or `original_line`), `body`, `user.login`. Section: **`path` (line N)**.  
-If the list is long, use `--paginate` or multiple pages.
+**2c. Inline (diff) comments** — `gh api repos/OWNER/REPO/pulls/NUMBER/comments` → each has `path`, `line` (or `original_line`), `body`, `user.login` → section **`path` (line N)**.
 
-**2d. Additional links and pasted content**  
-- **Issue/task links:** If user provides Jira, Linear, Notion, or GitHub issue URLs, fetch or ask for the content (acceptance criteria, comments, errors) and add to the comment/context list.  
-- **Pasted content:** Any pasted logs, error output, or task text = additional comments or failed-check detail. Fold into the same structure (by section or check).  
-- **Issue comments (GitHub):** If PR is linked to an issue, `gh api repos/OWNER/REPO/issues/NUMBER/comments` can add context.
+**2d. Pasted content / extra links** — If the user pastes logs, task text, or provides issue/task URLs, treat as additional comments or failed-check detail and add to the list.
 
-**Output to build:** A single list of “comments” where each has: **section** (General | Review (@user) | path:line), **author**, **body**. No duplicates; merge by section.
+**Output:** One list of comments: **section**, **author**, **body**. No duplicates.
 
 ---
 
-## Step 3 — Gather failed checks
+## Step 3 — Gather failed checks (CI)
 
-**3a. Status check rollup**  
-`gh pr view <PR> --json statusCheckRollup -q '.statusCheckRollup[]? | select(.conclusion != "SUCCESS" and .conclusion != null) | "\(.name): \(.conclusion)"'`  
-Or full JSON and filter: any `conclusion` in FAILURE, ERROR, CANCELLED, TIMED_OUT, etc. (treat anything other than SUCCESS and null as “failed” for reporting).
+- `gh pr view <PR> --json statusCheckRollup` → filter where `conclusion` is not SUCCESS (FAILURE, ERROR, CANCELLED, etc.).
+- `gh pr checks <PR>` → failed/errored rows.
 
-**3b. Checks run list**  
-`gh pr checks <PR>`  
-→ Parse output for failed / errored rows; include check name and, if shown, link or details.
-
-**Output:** List of **failed checks**: name, conclusion/status, and link if available (e.g. from `detailsUrl` in statusCheckRollup).
+**Output:** List of **failed checks**: name, conclusion, link (e.g. `detailsUrl`) if available. If the user pasted check logs or error output, attach to the relevant check.
 
 ---
 
-## Step 4 — List files in scope (PR diff only)
+## Step 4 — Scope: changed code only (PR diff)
 
-Only suggest or apply edits in files that actually changed in the PR. Do not change unrelated files.
-
-- **Command:**  
-  `git diff base...HEAD --name-only`  
-  with `base` = `upstream/main` or `main` (from Step 1).  
-  If not in the repo: `gh pr diff <PR> --name-only` (or infer from `gh pr view <PR> --json files`).
-
-- **Scope rule:** Every fix or suggestion must reference only these files (or “no code change” for general/process comments). Do not add refactors or “improve” existing structures outside this set.
+- **Files in scope:** `git diff base...HEAD --name-only` (base from Step 1). If not in repo: `gh pr diff <PR> --name-only` or `gh pr view <PR> --json files`.
+- **Prefer changed regions:** When a comment points to a file, prefer editing only the **lines or regions that the PR actually changed** (`git diff base...HEAD -U0 -- path` or inspect the diff). Avoid modifying unchanged, previously working code in the same file.
+- **Rules:**
+  - Only suggest or apply edits in **files that appear in the PR diff**. Do not change files that are not part of the PR.
+  - Within those files, **avoid updating existing code** that the PR did not touch—limit edits to what’s needed to address the comment in the **changed** area.
+  - **Major goal:** Touch changed code; avoid changes into previously working code. Focus on what matters for the current task.
 
 ---
 
-## Step 5 — Run local standards (format, lint, test)
+## Step 5 — Consolidate: for each comment, compare current code with required change
 
-From the PR’s repo root (current branch = PR head), run the project’s usual toolchain so the **newest changes** pass format, lint, and test. Prefer what CI uses (e.g. `.github/workflows/*.yml`); otherwise infer from project files.
+Build a **single consolidated list**. For **each** comment (and each failed check that implies a code change), produce one entry with:
 
-**Detect and run:**
+1. **Comment** — What the comment (or check) says. Quote or paraphrase. Author and section (e.g. `path/to/file.go L42`, General).
 
-- **Rust** — `cargo fmt --check` (or `cargo fmt` then report changes); `cargo clippy`; `cargo test`. Fix fmt with `cargo fmt`; fix clippy/test in scope.
-- **Go** — `gofmt -l .` or `go fmt ./...`; `go vet ./...`; `go test ./...`.
-- **JS/TS (npm/pnpm/yarn)** — `npm run format` or `npx prettier --check .`; `npm run lint` or `npx eslint .`; `npm test` (or `npm run test`).
-- **Python** — `ruff format --check .` or `black --check .`; `ruff check .` or `pylint`; `pytest`.
-- **Makefile** — If present, try `make format` (or `make fmt`), `make lint`, `make test`.
+2. **Current code** — How the relevant code looks **right now**. Show the snippet (file, line range, or key lines). If the comment is about a specific line, show that line and nearby context.
 
-Run **format** first, then **lint**, then **test**. Capture stdout/stderr for any failure.
+3. **Why it’s wrong** — Short explanation of how the current code does not meet what the comment asks. If the comment might be a **wrong assumption** (e.g. outdated, or based on a misunderstanding), say so here instead of “wrong.”
 
-**Output:** For each of format / lint / test: **OK** or **FAILED** with the relevant log excerpt (file, line, or error message). Treat failures like failed checks: list them in the summary (Step 6) and address in Steps 8–9 (minimal fix in a file from the PR diff).
+4. **Needs change?** — **Evaluate:** Does this comment actually require a code change? Options: **Yes** — current code should be updated to match the comment. **No — wrong assumption** — the comment is outdated or incorrect; suggest a short reply to the reviewer instead of changing code. **No — already correct** — the code already matches; suggest a short reply that it’s done or point to the right line.
 
----
+5. **Expected result** — If “Needs change? = Yes”: one minimal, concrete change so the **current code** becomes the **expected result** (the change the comment asks for). One small edit; no refactors. If “No”: suggested reply or “no change.”
 
-## Step 6 — Present summary (clear structure)
-
-Produce a single review summary the user can follow line by line.
-
-**6a. Local standards (Step 5)**
-
-- **Format** — OK or list issues (and which files).
-- **Lint** — OK or list issues (e.g. clippy, eslint, ruff).
-- **Test** — OK or list failing tests / errors.
-
-**6b. Comments by section**
-
-- **General** — List each top-level/issue comment: author, body (short), and whether it needs a code change or a reply.
-- **Review (by author)** — Same for each review body.
-- **File-specific** — Group by `path`. Under each path, list comments by line (or “whole file”): author, body.  
-  Example:
-
-  ```
-  path/to/file.go
-    L42  @reviewer: "Use constant here"
-    L99  @reviewer: "Handle nil"
-  ```
-
-**6c. Failed checks (CI)**
-
-- One line per failed check: **Name** — conclusion/status (and link if available).  
-- If there are logs or error snippets (e.g. user pasted them), add a short “Error / note” under that check.
-
-**6d. Scope reminder**
-
-- “Edits below are limited to files in the PR diff: …” (list or “see Step 4”).
+**Output:** A clear list (table or bullets) so the user can go down the list and see: comment → current code → why wrong / wrong assumption → needs change? → expected result (or reply).
 
 ---
 
-## Step 7 — Address each comment (minimal, scoped)
+## Step 6 — Address each comment
 
-For **each** comment (and each failed check that implies a code fix):
+For each entry in the consolidated list where **Needs change? = Yes**:
 
-1. **Identify** — Section (General / path:line) and the exact request.
-2. **Locate** — If it’s about code, the file and line (or region) in the **PR diff**. If the file is not in the diff list from Step 4, do **not** suggest a code change (only a reply or doc change if appropriate).
-3. **Propose** — One small, concrete change: the minimal edit that satisfies the comment. Preserve existing structure; avoid renaming or refactoring unrelated code.
-4. **Apply** — If the user wants edits in the repo, make only that edit (or a short sequence of minimal edits). If the comment is non-blocking or question-only, suggest a short reply instead.
+- **Apply** the minimal edit that brings current code to the expected result. **Only touch changed code** (files and, when possible, lines/regions in the PR diff). One comment → one focused change (or one reply when no code change).
+- If **Needs change? = No** (wrong assumption or already correct): suggest a short reply to the reviewer; do not change code unless the user asks.
 
 **Rules:**
 
-- One comment → one focused response (one change or one reply).
-- Prefer the smallest edit (e.g. fix the line, add the null check, use the constant). Do not rewrite the whole function or file unless the comment explicitly asks for it.
-- Do not change formatting, naming, or structure in files that are not part of the PR diff or not required by the comment/check.
+- **Avoid updating existing code.** Limit edits to files in the PR diff and, within those files, to the areas the PR actually changed. Do not refactor or “improve” previously working code.
+- Compare current code with required change; propose only what’s needed to satisfy the comment for the **current task goal**.
+- Do not run format, lint, or test. Other skills handle that.
+- Do not change files outside the PR diff or untouched regions for “improvement.”
 
 ---
 
-## Step 8 — Address failed checks (CI) and local standards
+## Step 7 — Failed checks (CI)
 
-**CI failed checks (from Step 3):**
-
-For each failed check:
-
-- **Build / test failure:** From logs or `gh run view` / run URL, identify the failing test or step. Suggest the minimal code or config change in a file that is in the PR diff. If logs are not available, suggest: “Run `gh pr checks <PR>` and open the failed run for logs; fix the reported errors in <list of changed files>.”
-- **Linter:** Same: minimal change in the reported file/line, scoped to the diff.
-- **Other:** Summarize what failed and one concrete next step (e.g. “Re-run the job” or “Fix X in file Y”).
-
-**Local standards (from Step 5):**
-
-- **Format failed:** Apply the project’s formatter (e.g. `cargo fmt`, `go fmt`, `prettier --write`) only to files in the PR diff; re-run format to confirm.
-- **Lint failed:** Fix the reported issues (e.g. clippy, eslint, ruff) in the reported file/line; keep changes minimal and in scope.
-- **Test failed:** Fix the failing test or code under test in a file from the PR diff; re-run tests to confirm.
+For each failed check from Step 3: if there are logs or pasted error output, **compare** the failure with the current code (relevant file/line). Propose the **minimal code change** that would fix the reported error **in changed code only** (file and region from the PR diff). Do not suggest edits to previously working, unchanged code. If no logs are available, state: “Open the check run for logs; then fix the reported error in <files in scope>.” Do not run the check locally; only compare and propose.
 
 ---
 
-## Step 9 — Iterate until every situation is fixed
-
-After applying fixes (Steps 7–8), **re-run** local standards (format, lint, test) and, if possible, re-check CI status. If anything still fails or any comment is left unaddressed:
-
-- Fix the next failure or comment (minimal, scoped).
-- Commit and push if working in the repo (so CI can re-run).
-- Re-run local format/lint/test.
-- **Repeat** until (a) all comments addressed, all local checks and CI pass, or (b) no further progress can be made (then report what remains).
-
-Goal: **perfect current situation** for the PR—all feedback resolved, all checks green.
-
----
-
-## Step 10 — Verification (self-check)
+## Verification (self-check)
 
 Before finishing:
 
-- [ ] Local standards (format, lint, test) were run and results are in the summary (Step 5 → 6a).
-- [ ] Every comment is listed with a section (General / path:line).
-- [ ] Every failed check (CI and local) is listed with name and conclusion/link or log.
-- [ ] Every suggested or applied edit is in a file from the PR diff (Step 4).
-- [ ] No edits were made to files outside the diff for “improvement” or refactor.
-- [ ] Each comment has exactly one response (one minimal change or one reply).
-- [ ] Local format/lint/test re-run after fixes (if any) and pass.
-- [ ] Iteration (Step 9): repeated until all pass or no further progress.
+- [ ] Every comment is in the consolidated list with: Comment, Current code, Why wrong / wrong assumption, Needs change?, Expected result.
+- [ ] Each “Needs change? = Yes” has a concrete edit (or was applied); each “No” has a suggested reply.
+- [ ] Every suggested or applied edit is in a file from the PR diff and, where possible, in changed regions only (no edits to previously working, unchanged code).
+- [ ] No steps ran format, lint, or test (this skill only compares and addresses comments).
 
 ---
 
 ## Notes
 
-- **No browser or bookmarklet.** All data comes from `gh pr view`, `gh api`, `gh pr checks`, and `git diff`.
-- **Base branch:** Prefer `upstream/main` when the repo has an upstream remote; otherwise `main`.
-- **Pasted content:** If the user pastes extra context (e.g. task description, logs), treat it as additional comments or check errors and fold into the same structure (by section / check).
-- **Task/issue links:** If the user only provides a Jira/Linear/Notion link, ask for the PR URL or pasted text (comments, acceptance criteria, errors); then run the steps above and fold that content into the summary. **Get the most data:** always use PR URL + any extra links or paste the user gives.
-- **Split:** For creating/updating the PR (ensure project works, then open/update), use **gh-pr**. For syncing branch with main/upstream and resolving conflicts until tests pass, use **gh-pull**.
+- All data from `gh pr view`, `gh api`, `gh pr checks`, and `git diff`. No sync, no merge, no running format/lint/test.
+- Base branch for diff/scope only: `upstream/main` or `main`.
+- **Changed code only:** Avoid updating existing code. Touch only what the PR changed; do not modify previously working code. Focus on what matters for the current task.
+- **Split:** Creating/updating the PR = **gh-pr**. Syncing branch and resolving conflicts = **gh-pull**. Running and fixing format/lint/test = other code skills.

@@ -1,52 +1,67 @@
 ---
 name: gh-pr
 description: >-
-  Ensure the current project works (sync, format, test), then craft or update
-  the PR. Use for creating/updating a PR—not for addressing review feedback.
+  Create or update the PR from the current branch to main or upstream. Check if
+  one exists, summarize changes vs base, write a strong description, then
+  create or edit. No add/commit/push, no sync, no build.
 ---
 
 # PR
 
-**Responsibility:** Make sure the current project works, then create or update the PR. Sync build (branch + main/upstream), run format and test, commit and push, then open or update the right PR (same repo → main; fork → upstream). Does **not** address existing PR comments or review feedback—use **gh-pr-review** for that.
+**Sole purpose:** Create or update the pull request from the current branch to **main** (same repo) or **upstream** (fork). Check whether a PR already exists; summarize changes vs the base branch; write a strong description (emoji, tables, nested path lists, bold, memory/CPU); then create or update the PR. Does not add, commit, or push; does not sync or build—do those separately or with **gh-pull** / **gh-pr-review**.
 
-**Fork:** on main → PR fork main to upstream main; on branch → PR fork branch to upstream main. **Same repo:** on branch → PR to main. On main with no upstream → push only.
+**Target:** Same repo → base `main`, head = current branch. Fork → base `upstream/main`, head = `FORK_OWNER:main` or `FORK_OWNER:$BRANCH`. On main with no upstream → there is no PR to create; stop.
 
 ## On invoke
 
-Start immediately. Run commands one by one. Do not summarize. Focus only on project health and PR create/update.
+Start immediately. Run commands one by one. Do not summarize. Focus only on: (1) whether a PR exists, (2) diff vs base, (3) description quality, (4) create or update the PR.
 
 ## Workflow
 
-1. **Branch & upstream** — `BRANCH=$(git branch --show-current)`. Check upstream: `git remote get-url upstream`; if missing, `gh repo view --json parent -q '.parent.owner.login + "/" + .parent.name'` and add with `git remote add upstream https://github.com/<parent>.git` (if no parent, no upstream). So we know: **fork** (upstream exists) vs **same repo** (no upstream).
+1. **Branch & base** — `BRANCH=$(git branch --show-current)`. If `BRANCH` is `main` and there is no upstream remote: there is no PR to create for “main → main”; stop. Otherwise set **base** = `upstream/main` if `git remote get-url upstream` exists, else **base** = `main`. For a fork, parse **UPSTREAM** (owner/repo) and **FORK_OWNER** (origin owner).
 
-2. **Sync build** — Working tree includes current branch + main + upstream when applicable.
-   - `git fetch origin`
-   - Merge from origin: `git merge origin/$BRANCH` (skip if branch has no remote).
-   - If `$BRANCH` is not `main`: `git merge origin/main`.
-   - If upstream exists: `git fetch upstream`, `git merge upstream/main`.
-   - Resolve conflicts. Do not push yet.
+2. **Check existing PR** — **Same repo:** `gh pr list --head $BRANCH --base main`. **Fork:** `gh pr list --repo $UPSTREAM --head $FORK_OWNER:$BRANCH` (or `$FORK_OWNER:main` when on main). Determine if a PR already exists; note its number (and URL if useful).
 
-3. **Format & test** — Inspect repo for format and test (`.github/workflows`, `package.json`, `Makefile`, etc.). Run **format** then **test** if present. Fix or note failures.
+3. **Summarize changes vs base** — Run `git diff base...HEAD --name-status`. Group output by **Added**, **Modified**, **Deleted**. Use this to build the PR description (see below).
 
-4. **Add, commit, push** — `git add .` (or `git add -A`). Commit message from `git diff --stat`: one-line. `git commit -m "..."` (skip if nothing to commit). `git push origin $BRANCH`.
+4. **Create or update PR** — If a PR exists: `gh pr edit <number>` (same repo) or `gh pr edit <number> --repo $UPSTREAM` (fork) with `--title "..."` and `--body "..."`. If not: `gh pr create --base main --head $BRANCH` (same repo) or `gh pr create --repo $UPSTREAM --base main --head $FORK_OWNER:$BRANCH` (or `$FORK_OWNER:main` on main) with `--title "..."` and `--body "..."`. Use the description format below for the body. Title: one line, no emojis.
 
-5. **PR** — Only skip if same repo and on main (no upstream).
-   - **Same repo, on branch:** Diff `main...HEAD`. `gh pr list --head $BRANCH --base main`. If exists: edit; else create. Base main, head $BRANCH.
-   - **Fork, on main:** Create/update PR from fork main to upstream main. Parse `UPSTREAM` from `git remote get-url upstream` (e.g. `owner/repo`). `FORK_OWNER` = origin owner (`gh repo view --json owner -q .owner.login` or parse origin URL). Diff: `git diff upstream/main...HEAD --name-status`. `gh pr list --repo $UPSTREAM --head $FORK_OWNER:main`. If exists: `gh pr edit <number> --repo $UPSTREAM --title "..." --body "..."`. Else: `gh pr create --repo $UPSTREAM --base main --head $FORK_OWNER:main --title "..." --body "..."`.
-   - **Fork, on branch:** Same as fork on main but head is `$FORK_OWNER:$BRANCH`. Diff `upstream/main...HEAD`. `gh pr list --repo $UPSTREAM --head $FORK_OWNER:$BRANCH`. Edit or create.
-
-If nothing to commit and nothing to push and we didn’t open/update a PR: say "Changes were already pushed."
+---
 
 ## PR description
 
-Use diff (`main...HEAD` or `upstream/main...HEAD`) with `--name-status`.
+Use the diff from step 3 (`base...HEAD`, `--name-status`). Write a **strong description**: emoji for section headers, **bullet points with nested lists** in Summary, **tables** for Impact, **bold** for important points, clear **memory/CPU** in Review. Keep **Changes** quite low (brief, last).
 
-**Title:** One line, no emojis (plain text only).
+### Structure (order)
 
-**Body:** Bullets/tables. Short phrases; focus on **relevant changes** and **affected files**. Include **Review:** performance, memory/space, integrations when relevant. Emojis in the body are fine (e.g. ✨ Summary, 📁 Changes, 🔍 Review)—use freely where they help.
+1. **✨ Summary** — **Bullet points with nested lists** (not a single paragraph). Top-level bullets for main points; nest sub-points or details underneath. **Bold** the main goal or outcome. Example shape:
+   - **Main outcome** — one line
+     - Detail or scope
+     - Another detail
+   - What else changed
+     - Sub-point
+
+2. **📊 Impact** — Short table for major metrics (**Memory**, **CPU**, **Latency**). Columns e.g. Area | Change | Note. When relevant; omit if no meaningful impact.
+
+3. **🔍 Review** — **Affirmations about memory and CPU**: **improved**, **worse**, or **unchanged** in short bullets (e.g. **Memory: Lower** — fewer allocations; **CPU: Worse** — new validation on hot path). If no meaningful change: **Memory/CPU:** No significant change.
+
+4. **📁 Changes** — Keep **quite low**: brief nested path list by directory (Added / Modified / Deleted). One level of nesting is enough; avoid long file lists. End Deleted with: ⚠️ *Review removals before merging.*
+
+5. **Title** — One line, no emojis (plain text).
+
+### Format notes
+
+- **Summary:** Prefer bullets + nested lists over a block paragraph.
+- **Changes:** Short and last; don’t let the file list dominate the description.
+- **Bold:** Important terms (**Breaking change**, **Performance**, **Memory**, **CPU**).
+- **Emoji:** Section headers (✨ 📊 🔍 📁); keep title plain.
+- **Memory/CPU:** At least one clear affirmation in Review.
+
+---
 
 ## Notes
 
-- Run from project root. Abort merge: `git merge --abort`.
+- Run from project root.
 - Prerequisites: `gh` CLI, `gh auth status`.
-- **Split:** For syncing branch with main/upstream and resolving conflicts until tests pass, use **gh-pull**. For addressing review comments and failed checks on an existing PR, use **gh-pr-review**.
+- **Branch must be pushed** for the PR to exist or to update the correct branch. Push first (e.g. with **gh-pull** or manually) if needed.
+- This skill does not add, commit, push, sync, or build. Use **gh-pull** to sync with main/upstream and get tests passing; use **gh-pr-review** to address comments and failed checks.
