@@ -3,3 +3,7 @@
 *.swo
 .idea/
 .vscode/
+node_modules/
+scripts/node_modules/
+scripts/link-fetcher/node_modules/
+scripts/skills/node_modules/

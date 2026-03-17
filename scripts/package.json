@@ -1,0 +1,20 @@
+{
+  "name": "cursor-skills-scripts",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Scripts for cursor-skills: skill sync, link-fetcher.",
+  "scripts": {
+    "test": "node --test skills/test/sync.test.js link-fetcher/test/fetch.test.js link-fetcher/test/crawl.test.js",
+    "test:skills": "node --test skills/test/sync.test.js",
+    "test:link-fetcher": "node --test link-fetcher/test/fetch.test.js link-fetcher/test/crawl.test.js",
+    "test:coverage": "node --experimental-test-coverage --test skills/test/sync.test.js link-fetcher/test/fetch.test.js link-fetcher/test/crawl.test.js",
+    "test:coverage:check": "node check-coverage.js 79",
+    "sync": "node skills/sync.js",
+    "fetch": "node link-fetcher/fetch.js",
+    "crawl": "node link-fetcher/crawl.js"
+  },
+  "dependencies": {
+    "playwright": "^1.49.0"
+  }
+}
