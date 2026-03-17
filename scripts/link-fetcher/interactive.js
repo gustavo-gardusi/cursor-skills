@@ -14,6 +14,7 @@
  *   --timeout <ms>    Per-page timeout (default: 30000)
  *   --out <path>      Write visited pages as JSON when done (same format as fetch/crawl)
  *   --compact         With --out: single-line JSON
+ *   --visited-file <path>  Load/save visited URLs (one per line); skip already-visited links
  *
  * Flow: fetch start URL → show "Started: <url>, depth 0", list top N links →
  * prompt (Enter = open 1, 1–N = open that link, q = quit) → if open: fetch that
@@ -24,9 +25,10 @@
 import { createInterface } from 'readline';
 import { argv } from 'process';
 import { fileURLToPath } from 'url';
-import { writeFileSync } from 'fs';
+import { writeFileSync, existsSync, readFileSync } from 'fs';
 import { chromium } from 'playwright';
 import { parseArgs, fetchUrl } from './fetch.js';
+import { loadVisitedSet, saveVisitedSet, normalizeVisitedUrl } from './visited.js';
 
 const CDP_URL = 'http://localhost:9222';
 
@@ -37,10 +39,15 @@ function parseInteractiveArgs(args) {
   let iterations = 1;
   let out = null;
   let compact = false;
+  let visitedFile = null;
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === '--out') {
       out = args[++i];
+      continue;
+    }
+    if (a === '--visited-file') {
+      visitedFile = args[++i];
       continue;
     }
     if (a === '--compact') {
@@ -74,7 +81,7 @@ function parseInteractiveArgs(args) {
   fetchOpts.links = true;
   fetchOpts.linksLimit = top;
   fetchOpts.linksSameSite = true;
-  return { startUrl, top, iterations, out, compact, fetchOpts };
+  return { startUrl, top, iterations, out, compact, visitedFile, fetchOpts };
 }
 
 function ask(rl, message) {
@@ -120,7 +127,7 @@ function pageEntry(result) {
 }
 
 async function runInteractive(args = argv.slice(2), deps = {}) {
-  const { startUrl, top, iterations, out: outPath, compact, fetchOpts } = parseInteractiveArgs(args);
+  const { startUrl, top, iterations, out: outPath, compact, visitedFile, fetchOpts } = parseInteractiveArgs(args);
   if (!startUrl) {
     const msg = 'Usage: node interactive.js [--top N] [--iterations N] [--connect-chrome] <start-url>';
     if (deps.getPage) throw new Error(msg);
@@ -150,6 +157,10 @@ async function runInteractive(args = argv.slice(2), deps = {}) {
         return ask(rl, `\nOpen next: [1-${top}] or Enter for 1, q to quit: `);
       };
 
+  const exists = deps.existsSync ?? existsSync;
+  const read = deps.readFileSync ?? readFileSync;
+  const visited = visitedFile ? loadVisitedSet(visitedFile, { existsSync: exists, readFileSync: read }) : null;
+
   const pages = [];
   try {
     let depth = 0;
@@ -161,6 +172,10 @@ async function runInteractive(args = argv.slice(2), deps = {}) {
     // Fetch start page
     printContext(startUrl, depth, null, null, currentUrl);
     const result = await fetchUrl(page, currentUrl, fetchOpts);
+    if (visited) {
+      const n = normalizeVisitedUrl(currentUrl);
+      if (n) visited.add(n);
+    }
     if (result.error) {
       if (deps.getPage) throw new Error(result.error);
       console.error('Error:', result.error);
@@ -193,6 +208,12 @@ async function runInteractive(args = argv.slice(2), deps = {}) {
         continue;
       }
 
+      const nextNorm = normalizeVisitedUrl(nextUrl) || nextUrl;
+      if (visited && visited.has(nextNorm)) {
+        console.log('Already visited, pick another or q to quit.');
+        continue;
+      }
+
       if (depth >= iterations) {
         console.log(`Max depth (${iterations}) reached. q to quit.`);
         continue;
@@ -204,6 +225,7 @@ async function runInteractive(args = argv.slice(2), deps = {}) {
 
       printContext(startUrl, depth, linkIndexAtLevel, totalAtLevel, currentUrl);
       const nextResult = await fetchUrl(page, currentUrl, fetchOpts);
+      if (visited && nextNorm) visited.add(nextNorm);
       if (nextResult.error) {
         console.error('Error:', nextResult.error);
         depth -= 1;
@@ -226,6 +248,10 @@ async function runInteractive(args = argv.slice(2), deps = {}) {
       const str = compact ? JSON.stringify(payload) : JSON.stringify(payload, null, 2);
       if (deps.writeFile) deps.writeFile(outPath, str);
       else writeFileSync(outPath, str);
+    }
+    if (visited && visitedFile) {
+      const write = deps.writeFileSync ?? writeFileSync;
+      saveVisitedSet(visitedFile, visited, { writeFileSync: write });
     }
   }
 }

@@ -88,6 +88,11 @@ describe('fetch parseArgs', () => {
     assert.strictEqual(opts.append, true);
     assert.strictEqual(opts.out, 'out.json');
   });
+
+  test('parses --visited-file', () => {
+    const opts = parseArgs(['--visited-file', '/path/visited.txt', 'https://x.com']);
+    assert.strictEqual(opts.visitedFile, '/path/visited.txt');
+  });
 });
 
 describe('fetch fetchUrl', () => {
@@ -163,6 +168,45 @@ describe('fetch fetchUrl', () => {
     assert.ok(result.links.all.includes('https://other.com/baz'));
     assert.ok(result.links.best.every((u) => u.startsWith('https://example.com/')));
     assert.ok(!result.links.best.some((u) => u.includes('login')));
+  });
+
+  test('fetchUrl with opts.links filters images and out-of-scope from best (example website response)', async () => {
+    const pageUrl = 'https://docs.example.com/';
+    const mockAnchors = [
+      { href: 'https://docs.example.com/getting-started' },
+      { href: 'https://docs.example.com/api/reference' },
+      { href: 'https://docs.example.com/login' },
+      { href: 'https://docs.example.com/images/hero.png' },
+      { href: 'https://docs.example.com/static/logo.svg' },
+      { href: 'https://docs.example.com/img/banner.jpg' },
+      { href: 'https://docs.example.com/assets/style.css' },
+      { href: 'https://docs.example.com/blog/post-1' },
+    ];
+    const mockPage = {
+      goto: () => Promise.resolve({ ok: () => true }),
+      title: () => Promise.resolve('Docs'),
+      $: () => Promise.resolve({ innerText: () => Promise.resolve('Welcome') }),
+      $$eval: (_sel, fn, base) => Promise.resolve(fn(mockAnchors, base)),
+    };
+    const result = await fetchUrl(mockPage, pageUrl, {
+      waitUntil: 'load',
+      timeout: 5000,
+      links: true,
+      linksLimit: 50,
+      linksSameSite: true,
+    });
+    assert.strictEqual(result.ok, true);
+    assert.ok(Array.isArray(result.links.all));
+    assert.ok(Array.isArray(result.links.best));
+    const best = result.links.best;
+    assert.ok(best.some((u) => u.includes('getting-started')), 'best includes content page');
+    assert.ok(best.some((u) => u.includes('api/reference')), 'best includes content page');
+    assert.ok(best.some((u) => u.includes('blog/post-1')), 'best includes content page');
+    assert.ok(!best.some((u) => u.includes('login')), 'best excludes login');
+    assert.ok(!best.some((u) => u.includes('.png') || u.includes('images/')), 'best excludes image URL');
+    assert.ok(!best.some((u) => u.includes('static/') || u.includes('logo.svg')), 'best excludes static asset');
+    assert.ok(!best.some((u) => u.includes('img/') || u.includes('.jpg')), 'best excludes img path');
+    assert.ok(!best.some((u) => u.includes('assets/')), 'best excludes assets path');
   });
 
   test('fetchUrl without opts.links does not set result.links', async () => {
@@ -355,5 +399,27 @@ describe('fetch run (regression)', () => {
     const parsed = JSON.parse(str);
     assert.strictEqual(parsed.fetched, 1);
     assert.strictEqual(parsed.results[0].url, 'https://j.com');
+  });
+
+  test('run with --visited-file skips URLs in file and writes set at end', async () => {
+    const mockPage = {
+      goto: () => Promise.resolve({ ok: () => true }),
+      title: () => Promise.resolve('Page'),
+      $: () => Promise.resolve({ innerText: () => Promise.resolve('') }),
+    };
+    const written = {};
+    const opts = parseArgs(['--visited-file', '/v.txt', 'https://already.com', 'https://new.com']);
+    const out = await run(opts, {
+      getPage: async () => mockPage,
+      existsSync: (p) => p === '/v.txt',
+      readFileSync: (p) => (p === '/v.txt' ? 'https://already.com\n' : ''),
+      writeFileSync: (p, data) => { written[p] = data; },
+    });
+    assert.strictEqual(out.fetched, 1);
+    assert.strictEqual(out.results[0].url, 'https://new.com');
+    assert.ok('/v.txt' in written);
+    const lines = written['/v.txt'].trim().split('\n').sort();
+    assert.ok(lines.some((u) => u.startsWith('https://already.com')), 'visited file should contain already.com');
+    assert.ok(lines.some((u) => u.startsWith('https://new.com')), 'visited file should contain new.com');
   });
 });

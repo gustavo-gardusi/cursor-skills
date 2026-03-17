@@ -84,6 +84,16 @@ Fetches data from URLs using **Chrome** (or a launched browser). Scripts attach 
 - **interactive.js** — Single start URL → show top N same-site links → wait for input (1–N or q) → open chosen link; repeat. Defaults: **top 15**, **1 iteration**. Optional `--out` writes visited pages when done.
 - **crawl.js** — Seed URLs + `--per-page N --top X --rounds Y` → multi-round crawl → JSON.
 
+**Visited set (avoid re-visiting):** All three scripts support **`--visited-file <path>`**. The file stores one URL per line (LLM-friendly: plain text, easy to grep or feed to a model). On start, the script loads this set and skips any URL already in it; after each visit it adds the URL; when the run finishes it writes the full set back to the file. Use the same path across runs to accumulate a growing “already seen” list and avoid re-fetching the same page.
+
+**Link filtering (content-only links):** When extracting links, the scripts drop **images**, **static assets**, and **out-of-scope** URLs so you get content pages only (better for research and LLMs). Filtered out:
+
+- **Auth / session:** `login`, `signin`, `signout`, `register`, `auth`, `oauth`, `share`, `embed`
+- **Image and binary extensions:** `.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`, `.svg`, `.ico`, `.pdf`, `.mp4`, etc.
+- **Asset path segments:** `/img/`, `/images/`, `/image/`, `/assets/`, `/static/`, `/media/`, `/cdn/`, `/_next/static/`, `/dist/`
+
+So **fetch** (with `--links`) puts all raw links in `links.all` and the filtered list in `links.best`; **crawl** and **interactive** only enqueue or show filtered links. The tests include example website responses (content + login + images + assets) and assert what is kept vs filtered.
+
 ### First-time setup: Chrome profile and login
 
 Use a **separate Chrome profile** so remote debugging works and you only log in once (or periodically when sessions expire).
@@ -109,6 +119,9 @@ Use a **separate Chrome profile** so remote debugging works and you only log in 
    node scripts/link-fetcher/fetch.js --connect-chrome --out pages.json --compact url1 url2
    node scripts/link-fetcher/interactive.js --connect-chrome --out visited.json https://docs.example.com
    node scripts/link-fetcher/crawl.js --connect-chrome --seeds "https://docs.example.com" --rounds 2 --out crawl.json
+   # Reuse a visited list so you don’t re-fetch the same pages:
+   node scripts/link-fetcher/fetch.js --connect-chrome --visited-file visited-urls.txt url1 url2
+   node scripts/link-fetcher/crawl.js --connect-chrome --visited-file visited-urls.txt --seeds "https://docs.example.com" --rounds 2
    ```
    Default CDP URL is `http://localhost:9222`; use `--connect-chrome http://host:port` to override.
 
@@ -155,9 +168,9 @@ node scripts/link-fetcher/fetch.js --connect-chrome --out out.json --append http
 
 | Script         | Main options |
 |----------------|---------------|
-| **fetch.js**   | `--connect-chrome [url]`, `--urls-file <path>`, `--out <path>`, `--compact`, `--append`, `--wait-until`, `--selector`, `--timeout`, `--links`, `--links-limit`, `--links-same-site` / `--no-links-same-site`. |
-| **interactive.js** | `<start-url>`, `--top <n>`, `--iterations <n>`, `--out <path>`, `--compact`, `--connect-chrome [url]`, `--timeout`. |
-| **crawl.js**   | `--seeds "url1 url2"`, `--seeds-file <path>`, `--per-page N`, `--top X`, `--rounds Y`, `--connect-chrome [url]`, `--out <path>`, `--compact`, `--append`. |
+| **fetch.js**   | `--connect-chrome [url]`, `--urls-file <path>`, `--out <path>`, `--compact`, `--append`, `--visited-file <path>`, `--wait-until`, `--selector`, `--timeout`, `--links`, `--links-limit`, `--links-same-site` / `--no-links-same-site`. |
+| **interactive.js** | `<start-url>`, `--top <n>`, `--iterations <n>`, `--out <path>`, `--compact`, `--visited-file <path>`, `--connect-chrome [url]`, `--timeout`. |
+| **crawl.js**   | `--seeds "url1 url2"`, `--seeds-file <path>`, `--per-page N`, `--top X`, `--rounds Y`, `--visited-file <path>`, `--connect-chrome [url]`, `--out <path>`, `--compact`, `--append`. |
 
 Used by the **research** skill.
 
@@ -196,9 +209,13 @@ Run a subset:
 
 | Area | Covered |
 |------|--------|
-| **fetch.js** | `parseArgs` (URLs, `--out`, `--compact`, `--append`, `--links`, `--connect-chrome`, etc.); `fetchUrl` (success, goto failure, `res.ok()` false, null response, links extraction and throw); `run` with getPage/getBrowser mocks, output shape (`fetched`, `results`), `--compact` single-line JSON, `--append` merge and edge cases (file missing, invalid JSON). |
-| **crawl.js** | `parseArgs` (seeds, `--per-page`, `--top`, `--rounds`, `--compact`, `--append`); `isValidUrl`; `pickTopX`; `fetchPage` (success, goto failure, null response); `run` with mocks, two-round crawl, `--compact`, `--append` merge, output valid JSON. |
-| **interactive.js** | `parseInteractiveArgs` (defaults, `--top`, `--iterations`, `--out`, `--compact`, pass-through); `pageEntry` (normalized page object, with/without `links`, with `error`); `runInteractive` with getPage/askFn mocks (quit, follow link, invalid input, max depth, child fetch error, Enter = link 1, `--out` and writeFile mock, multi-page output, valid JSON). |
+| **fetch.js** | `parseArgs` (URLs, `--out`, `--compact`, `--append`, `--links`, `--visited-file`, `--connect-chrome`, etc.); `fetchUrl` (success, goto failure, `res.ok()` false, null response, links extraction and throw); link filtering (example website response: content vs login/images/assets); `run` with getPage/getBrowser mocks, output shape (`fetched`, `results`), `--compact` single-line JSON, `--append` merge, `--visited-file`. |
+| **crawl.js** | `parseArgs` (seeds, `--per-page`, `--top`, `--rounds`, `--compact`, `--append`, `--visited-file`); `isValidUrl`; `pickTopX`; `fetchPage` (success, goto failure, null response, **filters images/noise from links**); `run` with mocks, two-round crawl, `--compact`, `--append` merge, `--visited-file`, output valid JSON. |
+| **interactive.js** | `parseInteractiveArgs` (defaults, `--top`, `--iterations`, `--out`, `--compact`, `--visited-file`, pass-through); `pageEntry` (normalized page object, with/without `links`, with `error`); `runInteractive` with getPage/askFn mocks (quit, follow link, invalid input, max depth, child fetch error, Enter = link 1, `--out` and writeFile mock, multi-page output, valid JSON). |
+| **link-filter.js** | `isNoiseUrl`: filters auth paths (login, signin, oauth, etc.), image/asset extensions (jpg, png, gif, svg, pdf, mp4, etc.), asset path segments (/img/, /images/, /static/, /assets/, etc.); allows content pages. |
+| **visited.js** | `normalizeVisitedUrl` (strip hash, http(s) only); `loadVisitedSet` (one URL per line, empty when missing); `saveVisitedSet` (sorted, one per line). |
 | **skills/sync.js** | Path names, finding SKILL.md files, install/copy in and out with temp dirs. |
+
+Tests include **example website responses**: mock pages with a mix of content links, login, images (e.g. `.png`, `/images/`), and static assets; tests assert that `links.best` (fetch) or `result.links` (crawl) contain only content URLs and that login/image/asset URLs are filtered out.
 
 Everything is exercised without starting Chrome or reading real stdin.

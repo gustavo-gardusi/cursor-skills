@@ -13,6 +13,8 @@ import { fileURLToPath } from 'url';
 import { chromium } from 'playwright';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { argv } from 'process';
+import { loadVisitedSet, saveVisitedSet, normalizeVisitedUrl } from './visited.js';
+import { isNoiseUrl } from './link-filter.js';
 
 const CDP_URL = 'http://localhost:9222';
 
@@ -30,6 +32,7 @@ export function parseArgs(args = argv.slice(2)) {
     out: null,
     compact: false,
     append: false,
+    visitedFile: null,
   };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -68,6 +71,9 @@ export function parseArgs(args = argv.slice(2)) {
       case '--append':
         opts.append = true;
         break;
+      case '--visited-file':
+        opts.visitedFile = args[++i];
+        break;
     }
   }
   if (opts.seedsFile) {
@@ -93,7 +99,7 @@ async function extractLinks(page, limit) {
       .filter((href) => href.startsWith('http'))
       .slice(0, lim);
   }, limit);
-  return links.filter(isValidUrl);
+  return links.filter(isValidUrl).filter((href) => !isNoiseUrl(href));
 }
 
 export async function fetchPage(page, url, opts) {
@@ -115,9 +121,9 @@ export async function fetchPage(page, url, opts) {
   return result;
 }
 
-export function pickTopX(allLinks, alreadyFetched, X) {
+export function pickTopX(allLinks, alreadyFetched, X, normalize = (u) => u) {
   const seen = new Set(alreadyFetched);
-  const unique = [...new Set(allLinks)].filter((u) => !seen.has(u));
+  const unique = [...new Set(allLinks)].filter((u) => !seen.has(normalize(u) || u));
   return unique.slice(0, X);
 }
 
@@ -154,24 +160,34 @@ export async function run(opts, deps = {}) {
   }
 
   const allResults = [];
-  const fetchedUrls = new Set();
+  const exists = deps.existsSync ?? existsSync;
+  const read = deps.readFileSync ?? readFileSync;
+  const fetchedUrls = opts.visitedFile
+    ? loadVisitedSet(opts.visitedFile, { existsSync: exists, readFileSync: read })
+    : new Set();
   let currentRoundUrls = [...opts.seeds];
 
   for (let round = 0; round < opts.rounds; round++) {
     const allLinksThisRound = [];
     for (const url of currentRoundUrls) {
-      if (fetchedUrls.has(url)) continue;
-      fetchedUrls.add(url);
+      const norm = normalizeVisitedUrl(url) || url;
+      if (fetchedUrls.has(norm)) continue;
+      fetchedUrls.add(norm);
       const data = await fetchPage(page, url, opts);
       allResults.push(data);
       allLinksThisRound.push(...(data.links || []));
     }
     if (round === opts.rounds - 1) break;
-    currentRoundUrls = pickTopX(allLinksThisRound, fetchedUrls, opts.top);
+    currentRoundUrls = pickTopX(allLinksThisRound, fetchedUrls, opts.top, (u) => normalizeVisitedUrl(u) || u);
     if (!currentRoundUrls.length) break;
   }
 
   if (browser) await browser.close();
+
+  if (opts.visitedFile && fetchedUrls.size) {
+    const write = deps.writeFileSync ?? writeFileSync;
+    saveVisitedSet(opts.visitedFile, fetchedUrls, { writeFileSync: write });
+  }
 
   let out = {
     rounds: opts.rounds,
@@ -180,11 +196,9 @@ export async function run(opts, deps = {}) {
     totalFetched: allResults.length,
     results: allResults,
   };
-  const exists = deps.existsSync ?? existsSync;
-  const readFile = deps.readFileSync ?? readFileSync;
   if (opts.append && opts.out && exists(opts.out)) {
     try {
-      const existing = JSON.parse(readFile(opts.out, 'utf8'));
+      const existing = JSON.parse(read(opts.out, 'utf8'));
       const prev = existing.results || [];
       out = {
         rounds: opts.rounds,

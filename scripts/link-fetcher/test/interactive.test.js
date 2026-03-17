@@ -57,6 +57,12 @@ describe('interactive parseInteractiveArgs', () => {
     assert.strictEqual(out.compact, true);
     assert.strictEqual(out.startUrl, 'https://e.com');
   });
+
+  test('parses --visited-file', () => {
+    const out = parseInteractiveArgs(['--visited-file', 'visited-urls.txt', 'https://e.com']);
+    assert.strictEqual(out.visitedFile, 'visited-urls.txt');
+    assert.strictEqual(out.startUrl, 'https://e.com');
+  });
 });
 
 describe('interactive pageEntry', () => {

@@ -20,11 +20,14 @@
  *   --links                 Extract links from each page; output includes links.all and links.best
  *   --links-limit <n>       Max "best" links per page (default: 50)
  *   --links-same-site       Keep only same-site links in "best" (default: true when --links)
+ *   --visited-file <path>   Load/save visited URLs (one per line); skip already visited, append and write at end
  */
 
 import { fileURLToPath } from 'url';
 import { chromium } from 'playwright';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { loadVisitedSet, saveVisitedSet, normalizeVisitedUrl } from './visited.js';
+import { isNoiseUrl } from './link-filter.js';
 import { argv } from 'process';
 
 const CDP_URL = 'http://localhost:9222';
@@ -47,19 +50,6 @@ function normalizeUrl(url, base) {
     return u.href;
   } catch {
     return null;
-  }
-}
-
-/** Path segments or query that usually mean non-content / noise. */
-const NOISE_PATHS = /\/?(login|signin|signout|logout|register|signup|auth|oauth|share|embed|javascript:)/i;
-
-function isNoiseUrl(href) {
-  try {
-    const u = new URL(href);
-    if (u.protocol !== 'http:' && u.protocol !== 'https:') return true;
-    return NOISE_PATHS.test(u.pathname) || NOISE_PATHS.test(u.search);
-  } catch {
-    return true;
   }
 }
 
@@ -124,6 +114,7 @@ export function parseArgs(args = argv.slice(2)) {
     links: false,
     linksLimit: 50,
     linksSameSite: true,
+    visitedFile: null,
   };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -166,6 +157,9 @@ export function parseArgs(args = argv.slice(2)) {
       case '--no-links-same-site':
         opts.linksSameSite = false;
         break;
+      case '--visited-file':
+        opts.visitedFile = args[++i];
+        break;
       default:
         if (!a.startsWith('--') && /^https?:\/\//i.test(a)) opts.urls.push(a);
     }
@@ -175,6 +169,13 @@ export function parseArgs(args = argv.slice(2)) {
     opts.urls.push(...lines.map((l) => l.trim()).filter(Boolean));
   }
   return opts;
+}
+
+function getVisitedSet(opts, deps) {
+  if (!opts.visitedFile) return null;
+  const exists = deps.existsSync ?? existsSync;
+  const read = deps.readFileSync ?? readFileSync;
+  return loadVisitedSet(opts.visitedFile, { existsSync: exists, readFileSync: read });
 }
 
 export async function fetchUrl(page, url, opts) {
@@ -239,12 +240,22 @@ export async function run(opts, deps = {}) {
     page = await context.newPage();
   }
 
+  const visited = getVisitedSet(opts, deps);
   const results = [];
   for (const url of opts.urls) {
-    results.push(await fetchUrl(page, url, opts));
+    const norm = normalizeVisitedUrl(url);
+    if (visited && norm && visited.has(norm)) continue;
+    const result = await fetchUrl(page, url, opts);
+    results.push(result);
+    if (visited && norm) visited.add(norm);
   }
 
   if (browser) await browser.close();
+
+  if (visited && opts.visitedFile) {
+    const write = deps.writeFileSync ?? writeFileSync;
+    saveVisitedSet(opts.visitedFile, visited, { writeFileSync: write });
+  }
 
   let out = { fetched: results.length, results };
   const exists = deps.existsSync ?? existsSync;

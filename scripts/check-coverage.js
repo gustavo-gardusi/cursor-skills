@@ -17,6 +17,8 @@ const result = spawnSync(
     '--experimental-test-coverage',
     '--test',
     'skills/test/sync.test.js',
+    'link-fetcher/test/visited.test.js',
+    'link-fetcher/test/link-filter.test.js',
     'link-fetcher/test/fetch.test.js',
     'link-fetcher/test/crawl.test.js',
     'link-fetcher/test/interactive.test.js',

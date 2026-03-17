@@ -61,6 +61,11 @@ describe('crawl parseArgs', () => {
     assert.strictEqual(opts.append, true);
     assert.strictEqual(opts.out, 'crawl.json');
   });
+
+  test('parses --visited-file', () => {
+    const opts = parseArgs(['--seeds', 'https://x.com', '--visited-file', 'visited.txt']);
+    assert.strictEqual(opts.visitedFile, 'visited.txt');
+  });
 });
 
 describe('crawl isValidUrl', () => {
@@ -131,6 +136,30 @@ describe('crawl fetchPage', () => {
     };
     const result = await fetchPage(mockPage, 'http://example.com', { waitUntil: 'load', timeout: 5000, perPage: 5 });
     assert.strictEqual(result.ok, false);
+  });
+
+  test('fetchPage filters images and noise from links (example website response)', async () => {
+    const mockAnchors = [
+      { href: 'https://site.com/page-a' },
+      { href: 'https://site.com/images/logo.png' },
+      { href: 'https://site.com/login' },
+      { href: 'https://site.com/page-b' },
+      { href: 'https://site.com/static/bundle.js' },
+    ];
+    const mockPage = {
+      goto: () => Promise.resolve({ ok: () => true }),
+      title: () => Promise.resolve('Site'),
+      $: () => Promise.resolve({ innerText: () => Promise.resolve('Body') }),
+      $$eval: (_sel, fn, lim) => Promise.resolve(fn(mockAnchors, lim)),
+    };
+    const result = await fetchPage(mockPage, 'https://site.com/', { waitUntil: 'load', timeout: 5000, perPage: 10 });
+    assert.strictEqual(result.ok, true);
+    assert.ok(Array.isArray(result.links));
+    assert.ok(result.links.some((u) => u.includes('page-a')), 'links includes content');
+    assert.ok(result.links.some((u) => u.includes('page-b')), 'links includes content');
+    assert.ok(!result.links.some((u) => u.includes('login')), 'links excludes login');
+    assert.ok(!result.links.some((u) => u.includes('.png') || u.includes('images/')), 'links excludes image');
+    assert.ok(!result.links.some((u) => u.includes('static/')), 'links excludes static asset');
   });
 });
 
@@ -279,5 +308,35 @@ describe('crawl run (regression)', () => {
     const parsed = JSON.parse(str);
     assert.strictEqual(parsed.totalFetched, 1);
     assert.strictEqual(parsed.results[0].url, 'https://s.com');
+  });
+
+  test('run with --visited-file loads set and writes at end', async () => {
+    const written = {};
+    const mockPage = {
+      goto: () => Promise.resolve({ ok: () => true }),
+      title: () => Promise.resolve('Page'),
+      $: () => Promise.resolve({ innerText: () => Promise.resolve('') }),
+      $$eval: () => Promise.resolve([]),
+    };
+    const opts = parseArgs([
+      '--seeds',
+      'https://old.com https://new.com',
+      '--rounds',
+      '1',
+      '--visited-file',
+      '/v.txt',
+    ]);
+    const out = await run(opts, {
+      getPage: async () => mockPage,
+      existsSync: (p) => p === '/v.txt',
+      readFileSync: (p) => (p === '/v.txt' ? 'https://old.com\n' : ''),
+      writeFileSync: (p, data) => { written[p] = data; },
+    });
+    assert.strictEqual(out.totalFetched, 1);
+    assert.strictEqual(out.results[0].url, 'https://new.com');
+    assert.ok('/v.txt' in written);
+    const lines = written['/v.txt'].trim().split('\n').sort();
+    assert.ok(lines.some((u) => u.startsWith('https://old.com')), 'visited file should contain old.com');
+    assert.ok(lines.some((u) => u.startsWith('https://new.com')), 'visited file should contain new.com');
   });
 });

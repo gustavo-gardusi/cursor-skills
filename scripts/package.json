@@ -5,10 +5,10 @@
   "type": "module",
   "description": "Scripts for cursor-skills: skill sync, link-fetcher.",
   "scripts": {
-    "test": "node --test skills/test/sync.test.js link-fetcher/test/fetch.test.js link-fetcher/test/crawl.test.js link-fetcher/test/interactive.test.js",
+    "test": "node --test skills/test/sync.test.js link-fetcher/test/visited.test.js link-fetcher/test/link-filter.test.js link-fetcher/test/fetch.test.js link-fetcher/test/crawl.test.js link-fetcher/test/interactive.test.js",
     "test:skills": "node --test skills/test/sync.test.js",
-    "test:link-fetcher": "node --test link-fetcher/test/fetch.test.js link-fetcher/test/crawl.test.js link-fetcher/test/interactive.test.js",
-    "test:coverage": "node --experimental-test-coverage --test skills/test/sync.test.js link-fetcher/test/fetch.test.js link-fetcher/test/crawl.test.js link-fetcher/test/interactive.test.js",
+    "test:link-fetcher": "node --test link-fetcher/test/visited.test.js link-fetcher/test/link-filter.test.js link-fetcher/test/fetch.test.js link-fetcher/test/crawl.test.js link-fetcher/test/interactive.test.js",
+    "test:coverage": "node --experimental-test-coverage --test skills/test/sync.test.js link-fetcher/test/visited.test.js link-fetcher/test/link-filter.test.js link-fetcher/test/fetch.test.js link-fetcher/test/crawl.test.js link-fetcher/test/interactive.test.js",
     "test:coverage:check": "node check-coverage.js 80",
     "sync": "node skills/sync.js",
     "fetch": "node link-fetcher/fetch.js",
