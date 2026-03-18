@@ -1,0 +1,32 @@
+# Run scripts tests (and coverage check) on push and PRs targeting main.
+# Lint can be added here when the project adds a lint script (e.g. eslint).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  scripts:
+    name: scripts (test + coverage)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+          cache: "npm"
+          cache-dependency-path: scripts/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --prefix scripts
+
+      - name: Test
+        run: npm test --prefix scripts
+
+      - name: Coverage check (80%)
+        run: npm run test:coverage:check --prefix scripts

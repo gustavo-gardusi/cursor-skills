@@ -152,4 +152,6 @@ To add or edit skills: change **`skills/…/SKILL.md`**, then run **`node script
 | **Run tests with coverage** | `npm run test:coverage --prefix scripts` |
 | **Check coverage threshold (80%)** | `npm run test:coverage:check --prefix scripts` |
 
+**CI:** On push and pull requests to `main`, [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs tests and the 80% coverage check. Add a lint step to the workflow when the project adds a lint script.
+
 Tests cover: skills sync, link-fetcher (fetch, crawl, interactive, visited, link-filter). All use mocks (no real Chrome or network). See [scripts/README.md](scripts/README.md) § Tests and coverage.
