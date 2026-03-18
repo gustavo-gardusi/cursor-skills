@@ -7,6 +7,9 @@
  * Usage:
  *   node crawl.js --seeds "https://a.com" --per-page 10 --top 20 --rounds 2
  *   node crawl.js --seeds-file seeds.txt --per-page 10 --top 20 --rounds 2 --connect-chrome --out crawl.json
+ *
+ *   --wait-after-load <ms>  After load, wait this many ms before extracting (default: 0; use 2000 for SPAs)
+ *   --delay-between-pages <ms>  Wait this many ms between each page (default: 0; use 3000 to avoid hammering)
  */
 
 import { fileURLToPath } from 'url';
@@ -29,6 +32,8 @@ export function parseArgs(args = argv.slice(2)) {
     cdpUrl: CDP_URL,
     timeout: 30_000,
     waitUntil: 'load',
+    waitAfterLoad: 0,
+    delayBetweenPages: 0,
     out: null,
     compact: false,
     append: false,
@@ -74,6 +79,12 @@ export function parseArgs(args = argv.slice(2)) {
       case '--visited-file':
         opts.visitedFile = args[++i];
         break;
+      case '--wait-after-load':
+        opts.waitAfterLoad = parseInt(args[++i], 10) || 0;
+        break;
+      case '--delay-between-pages':
+        opts.delayBetweenPages = parseInt(args[++i], 10) || 0;
+        break;
     }
   }
   if (opts.seedsFile) {
@@ -102,11 +113,17 @@ async function extractLinks(page, limit) {
   return links.filter(isValidUrl).filter((href) => !isNoiseUrl(href));
 }
 
+function delay(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 export async function fetchPage(page, url, opts) {
   const result = { url, ok: false, title: null, text: null, links: [], error: null };
   try {
     const res = await page.goto(url, { waitUntil: opts.waitUntil, timeout: opts.timeout });
     result.ok = !!(res && res.ok());
+    const waitMs = opts.waitAfterLoad || 0;
+    if (waitMs > 0) await delay(waitMs);
     result.title = await page.title();
     try {
       const el = await page.$('body');
@@ -167,15 +184,19 @@ export async function run(opts, deps = {}) {
     : new Set();
   let currentRoundUrls = [...opts.seeds];
 
+  const delayBetween = opts.delayBetweenPages || 0;
   for (let round = 0; round < opts.rounds; round++) {
     const allLinksThisRound = [];
-    for (const url of currentRoundUrls) {
+    const urlsThisRound = [...currentRoundUrls];
+    for (let i = 0; i < urlsThisRound.length; i++) {
+      const url = urlsThisRound[i];
       const norm = normalizeVisitedUrl(url) || url;
       if (fetchedUrls.has(norm)) continue;
       fetchedUrls.add(norm);
       const data = await fetchPage(page, url, opts);
       allResults.push(data);
       allLinksThisRound.push(...(data.links || []));
+      if (delayBetween > 0 && i < urlsThisRound.length - 1) await delay(delayBetween);
     }
     if (round === opts.rounds - 1) break;
     currentRoundUrls = pickTopX(allLinksThisRound, fetchedUrls, opts.top, (u) => normalizeVisitedUrl(u) || u);

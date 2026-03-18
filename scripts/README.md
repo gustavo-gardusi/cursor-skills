@@ -82,12 +82,12 @@ Fetches data from URLs using **Chrome** (or a launched browser). Scripts attach 
 
 ### Use from another repo
 
-You can run the link-fetcher from **any repo** (e.g. in Cursor chat from a different project) to gather context from URLs:
+You can run the link-fetcher from **any repo** (e.g. in Cursor chat from a different project) to gather context from URLs. For full local setup (clone → install → zsh env → Chrome profile), see the main **[README — Local setup](../README.md#local-setup)**.
 
 1. **Clone this repo** (cursor-skills) somewhere, e.g. `~/github/personal/cursor-skills`. The **repo root** is the directory that contains **`scripts/`**.
 2. **Install deps** in the clone: `npm install --prefix scripts` (from repo root).
-3. **Set** `CURSOR_SKILLS_REPO` to the **absolute path** of that clone (the repo root). See the main [README — Initial setup](../README.md#initial-setup-run-once): use `export CURSOR_SKILLS_REPO=/path/to/cursor-skills` in your shell (or add to `~/.zshrc`), or copy **`.env.example`** to **`.env`** in the clone and set `CURSOR_SKILLS_REPO` there.
-4. From the other repo, the **research-append** skill (when installed from cursor-skills) will run:
+3. **Set** `CURSOR_SKILLS_REPO` to the **absolute path** of that clone (the repo root). See the main [README — Local setup](../README.md#local-setup): add `export CURSOR_SKILLS_REPO=/path/to/cursor-skills` to your shell config (`~/.zshrc`, `~/.bashrc`, or `~/.profile`), then restart Cursor; or copy **`.env.example`** to **`.env`** in the clone and set `CURSOR_SKILLS_REPO` there.
+4. From the other repo, the **search** skill (when installed from cursor-skills) will run:
    - `node "$CURSOR_SKILLS_REPO/scripts/link-fetcher/fetch.js" ...` or
    - `node "$CURSOR_SKILLS_REPO/scripts/link-fetcher/crawl.js" ...`
    so you get the same Chrome-based fetch/crawl without copying the script.
@@ -101,11 +101,11 @@ node "$CURSOR_SKILLS_REPO/scripts/link-fetcher/crawl.js" --connect-chrome --seed
 
 ### Partial context storage (`.cursor/`)
 
-Research skills use **`.cursor/`** for ephemeral output (readable by Cursor, not part of the repo; add `.cursor/` to `.gitignore`). **Only research-append** may change the context file; **research-plan** only reads it and writes the plan file; **research-execute** only reads the plan and changes the repo.
+Research skills use **`.cursor/`** for ephemeral output (readable by Cursor, not part of the repo; add `.cursor/` to `.gitignore`). **Only search** may change the context file; **plan** only reads it and writes the plan file; **execute** only reads the plan and changes the repo.
 
-- **`.cursor/research-context.json`** — Written **only by research-append** (fetch/crawl output). Should include a top-level **`lastFetched`** (ISO timestamp). Use `--append` to merge new results; if `lastFetched` is older than a reasonable threshold (e.g. 24h), re-fetch to update. **research-plan** reads this (read-only) to craft plans.
+- **`.cursor/research-context.json`** — Written **only by search** (fetch/crawl output). Should include a top-level **`lastFetched`** (ISO timestamp). Use `--append` to merge new results; if `lastFetched` is older than a reasonable threshold (e.g. 24h), re-fetch to update. **plan** reads this (read-only) to craft plans.
 - **`.cursor/research-visited.txt`** — Optional: use **`--visited-file .cursor/research-visited.txt`** so the fetcher skips URLs already visited in previous runs (one URL per line). Append writes this; plan and execute do not use it.
-- **`.cursor/research-plan.md`** — Written by **research-plan** (implementation plan with file paths). **research-execute** reads this and applies the plan to the repo. Plan does not modify the context file.
+- **`.cursor/research-plan.md`** — Written by **plan** (implementation plan with file paths). **execute** reads this and applies the plan to the repo. Plan does not modify the context file.
 
 When running the fetcher manually: `--out .cursor/research-context.json` (and `--append` to add to existing), `--visited-file .cursor/research-visited.txt` to skip already-visited URLs; create `.cursor/` with `mkdir -p .cursor` if needed.
 
@@ -113,9 +113,9 @@ When running the fetcher manually: `--out .cursor/research-context.json` (and `-
 
 | Skill | Scripts / behavior |
 |-------|--------------------|
-| **research-append** | Uses **fetch.js** (seeds only: `--out`, `--visited-file`, `--append`, `--compact`, `--connect-chrome`, URLs as args or `--urls-file`) or **crawl.js** (BFS: `--seeds` / `--seeds-file`, `--per-page N`, `--top X`, `--rounds Y`, same flags). Writes `.cursor/research-context.json` (and optionally `.cursor/research-visited.txt`). Script output shape: `{ results: [ { url, title, text, ok, error?, links? } ] }` (crawl also has `rounds`, `perPage`, `top`, `totalFetched`). Append adds `lastFetched` (ISO) to the context file after the run. |
-| **research-plan** | Does **not** run link-fetcher. Reads `.cursor/research-context.json` (read-only) and the repo (read-only). Writes `.cursor/research-plan.md` only. |
-| **research-execute** | Does **not** run link-fetcher. Reads `.cursor/research-plan.md` and applies the plan to the repo (edits source/config). |
+| **search** | Uses **fetch.js** (seeds only: `--out`, `--visited-file`, `--append`, `--compact`, `--connect-chrome`, URLs as args or `--urls-file`) or **crawl.js** (BFS: `--seeds` / `--seeds-file`, `--per-page N`, `--top X`, `--rounds Y`, same flags). Writes `.cursor/research-context.json` (and optionally `.cursor/research-visited.txt`). Script output shape: `{ results: [ { url, title, text, ok, error?, links? } ] }` (crawl also has `rounds`, `perPage`, `top`, `totalFetched`). Append adds `lastFetched` (ISO) to the context file after the run. |
+| **plan** | Does **not** run link-fetcher. Reads `.cursor/research-context.json` (read-only) and the repo (read-only). Writes `.cursor/research-plan.md` only. |
+| **execute** | Does **not** run link-fetcher. Reads `.cursor/research-plan.md` and applies the plan to the repo (edits source/config). |
 
 - **fetch.js** — List of URLs → open one by one → collect title + text (+ optional links) → JSON.
 - **interactive.js** — Single start URL → show top N same-site links → wait for input (1–N or q) → open chosen link; repeat. Defaults: **top 15**, **1 iteration**. Optional `--out` writes visited pages when done.
@@ -133,10 +133,9 @@ So **fetch** (with `--links`) puts all raw links in `links.all` and the filtered
 
 ### First-time setup: Chrome profile and login
 
-Use a **separate Chrome profile** so remote debugging works and you only log in once (or periodically when sessions expire).
+Use a **separate Chrome profile** so you can keep your normal Chrome for daily use and run the link-fetcher in another window. **Order: first open Chrome with the debug profile, then run the link-fetcher.**
 
-1. **Quit Chrome completely** (so one instance uses the profile).
-2. Start Chrome with a dedicated user-data dir and remote debugging:
+1. **First**, start a **second** Chrome window (separate instance) with its own user-data dir and remote debugging. Your regular Chrome can stay open.
    ```bash
    # macOS – profile stored in ~/.chrome-debug-profile
    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
@@ -144,13 +143,13 @@ Use a **separate Chrome profile** so remote debugging works and you only log in 
      --user-data-dir="$HOME/.chrome-debug-profile"
    ```
    On Linux, use the path to your Chrome binary; on Windows, use `chrome.exe` with the same flags.
-3. In that Chrome window, **log in** to any sites you need (GitHub, internal docs, etc.). The profile is saved; next time you start Chrome with the same `--user-data-dir`, you stay logged in. Re-log when cookies or sessions expire (e.g. every few weeks).
-4. Leave that Chrome window **open**. In **another terminal**, run the link-fetcher commands with `--connect-chrome`. They attach to this browser; no new window is opened by the script.
+2. In **that** Chrome window, **log in** to any sites you need (GitHub, internal docs, etc.). The profile is saved; next time you start Chrome with the same `--user-data-dir`, you stay logged in. Re-log when cookies or sessions expire (e.g. every few weeks).
+3. Leave that Chrome window **open**. **Then** in another terminal run the link-fetcher with `--connect-chrome`. The script attaches to this browser and opens each link in it; it does not open a new window.
 
-### Workflow: one Chrome, many commands
+### Workflow: first Chrome, then commands
 
-1. Start Chrome once (step 2 above).
-2. Run any number of commands from repo root or `scripts/`:
+1. **First** start Chrome with the debug profile (step 1 above).
+2. **Then** run any number of commands from repo root or `scripts/`:
    ```bash
    node scripts/link-fetcher/fetch.js --connect-chrome --links https://example.com
    node scripts/link-fetcher/fetch.js --connect-chrome --out pages.json --compact url1 url2
@@ -161,6 +160,8 @@ Use a **separate Chrome profile** so remote debugging works and you only log in 
    node scripts/link-fetcher/crawl.js --connect-chrome --visited-file visited-urls.txt --seeds "https://docs.example.com" --rounds 2
    ```
    Default CDP URL is `http://localhost:9222`; use `--connect-chrome http://host:port` to override.
+
+   **Page load and pacing:** To wait for each page to be fully loaded before extracting and to space out requests, use **`--wait-after-load 2000`** (wait 2s after load before reading content) and **`--delay-between-pages 3000`** (3s between each page). Recommended for research to avoid hammering sites and to let SPAs render.
 
 **Without `--connect-chrome`:** A Chromium window is launched by Playwright (no existing auth; requires `npx playwright install chromium`).
 
@@ -205,9 +206,9 @@ node scripts/link-fetcher/fetch.js --connect-chrome --out out.json --append http
 
 | Script         | Main options |
 |----------------|---------------|
-| **fetch.js**   | `--connect-chrome [url]`, `--urls-file <path>`, `--out <path>`, `--compact`, `--append`, `--visited-file <path>`, `--wait-until`, `--selector`, `--timeout`, `--links`, `--links-limit`, `--links-same-site` / `--no-links-same-site`. |
+| **fetch.js**   | `--connect-chrome [url]`, `--urls-file <path>`, `--out <path>`, `--compact`, `--append`, `--visited-file <path>`, `--wait-until`, `--wait-after-load <ms>`, `--delay-between-pages <ms>`, `--selector`, `--timeout`, `--links`, `--links-limit`, `--links-same-site` / `--no-links-same-site`. |
 | **interactive.js** | `<start-url>`, `--top <n>`, `--iterations <n>`, `--out <path>`, `--compact`, `--visited-file <path>`, `--connect-chrome [url]`, `--timeout`. |
-| **crawl.js**   | `--seeds "url1 url2"`, `--seeds-file <path>`, `--per-page N`, `--top X`, `--rounds Y`, `--visited-file <path>`, `--connect-chrome [url]`, `--out <path>`, `--compact`, `--append`. |
+| **crawl.js**   | `--seeds "url1 url2"`, `--seeds-file <path>`, `--per-page N`, `--top X`, `--rounds Y`, `--visited-file <path>`, `--wait-after-load <ms>`, `--delay-between-pages <ms>`, `--connect-chrome [url]`, `--out <path>`, `--compact`, `--append`. |
 
 Used by the **research** skill.
 
@@ -246,8 +247,8 @@ Run a subset:
 
 | Area | Covered |
 |------|--------|
-| **fetch.js** | `parseArgs` (URLs, `--out`, `--compact`, `--append`, `--links`, `--visited-file`, `--connect-chrome`, etc.); `fetchUrl` (success, goto failure, `res.ok()` false, null response, links extraction and throw); link filtering (example website response: content vs login/images/assets); `run` with getPage/getBrowser mocks, output shape (`fetched`, `results`), `--compact` single-line JSON, `--append` merge, `--visited-file`. |
-| **crawl.js** | `parseArgs` (seeds, `--per-page`, `--top`, `--rounds`, `--compact`, `--append`, `--visited-file`); `isValidUrl`; `pickTopX`; `fetchPage` (success, goto failure, null response, **filters images/noise from links**); `run` with mocks, two-round crawl, `--compact`, `--append` merge, `--visited-file`, output valid JSON. |
+| **fetch.js** | `parseArgs` (URLs, `--out`, `--compact`, `--append`, `--links`, `--visited-file`, `--wait-after-load`, `--delay-between-pages`, `--connect-chrome`, etc.); `fetchUrl` (success, goto failure, `res.ok()` false, null response, links extraction and throw); link filtering (example website response: content vs login/images/assets); `run` with getPage/getBrowser mocks, output shape (`fetched`, `results`), `--compact` single-line JSON, `--append` merge, `--visited-file`. |
+| **crawl.js** | `parseArgs` (seeds, `--per-page`, `--top`, `--rounds`, `--compact`, `--append`, `--visited-file`, `--wait-after-load`, `--delay-between-pages`); `isValidUrl`; `pickTopX`; `fetchPage` (success, goto failure, null response, **filters images/noise from links**); `run` with mocks, two-round crawl, `--compact`, `--append` merge, `--visited-file`, output valid JSON. |
 | **interactive.js** | `parseInteractiveArgs` (defaults, `--top`, `--iterations`, `--out`, `--compact`, `--visited-file`, pass-through); `pageEntry` (normalized page object, with/without `links`, with `error`); `runInteractive` with getPage/askFn mocks (quit, follow link, invalid input, max depth, child fetch error, Enter = link 1, `--out` and writeFile mock, multi-page output, valid JSON). |
 | **link-filter.js** | `isNoiseUrl`: filters auth paths (login, signin, oauth, etc.), image/asset extensions (jpg, png, gif, svg, pdf, mp4, etc.), asset path segments (/img/, /images/, /static/, /assets/, etc.); allows content pages. |
 | **visited.js** | `normalizeVisitedUrl` (strip hash, http(s) only); `loadVisitedSet` (one URL per line, empty when missing); `saveVisitedSet` (sorted, one per line). |

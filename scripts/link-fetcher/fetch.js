@@ -21,6 +21,8 @@
  *   --links-limit <n>       Max "best" links per page (default: 50)
  *   --links-same-site       Keep only same-site links in "best" (default: true when --links)
  *   --visited-file <path>   Load/save visited URLs (one per line); skip already visited, append and write at end
+ *   --wait-after-load <ms>  After load event, wait this many ms before extracting (default: 0; use 2000 for SPAs)
+ *   --delay-between-pages <ms>  Wait this many ms between each page (default: 0; use 3000 to avoid hammering)
  */
 
 import { fileURLToPath } from 'url';
@@ -105,6 +107,8 @@ export function parseArgs(args = argv.slice(2)) {
     connectChrome: false,
     urlsFile: null,
     waitUntil: 'load',
+    waitAfterLoad: 0,
+    delayBetweenPages: 0,
     selector: null,
     timeout: 30_000,
     out: null,
@@ -160,6 +164,12 @@ export function parseArgs(args = argv.slice(2)) {
       case '--visited-file':
         opts.visitedFile = args[++i];
         break;
+      case '--wait-after-load':
+        opts.waitAfterLoad = parseInt(args[++i], 10) || 0;
+        break;
+      case '--delay-between-pages':
+        opts.delayBetweenPages = parseInt(args[++i], 10) || 0;
+        break;
       default:
         if (!a.startsWith('--') && /^https?:\/\//i.test(a)) opts.urls.push(a);
     }
@@ -178,6 +188,10 @@ function getVisitedSet(opts, deps) {
   return loadVisitedSet(opts.visitedFile, { existsSync: exists, readFileSync: read });
 }
 
+function delay(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 export async function fetchUrl(page, url, opts) {
   const result = { url, ok: false, title: null, text: null, error: null };
   try {
@@ -186,6 +200,8 @@ export async function fetchUrl(page, url, opts) {
       timeout: opts.timeout,
     });
     result.ok = !!(res && res.ok());
+    const waitMs = opts.waitAfterLoad || 0;
+    if (waitMs > 0) await delay(waitMs);
     result.title = await page.title();
     const sel = opts.selector || 'body';
     try {
@@ -242,12 +258,19 @@ export async function run(opts, deps = {}) {
 
   const visited = getVisitedSet(opts, deps);
   const results = [];
-  for (const url of opts.urls) {
+  const delayBetween = opts.delayBetweenPages || 0;
+  const urlsToFetch = opts.urls.filter((url) => {
+    const norm = normalizeVisitedUrl(url);
+    return !visited || !norm || !visited.has(norm);
+  });
+  for (let i = 0; i < urlsToFetch.length; i++) {
+    const url = urlsToFetch[i];
     const norm = normalizeVisitedUrl(url);
     if (visited && norm && visited.has(norm)) continue;
     const result = await fetchUrl(page, url, opts);
     results.push(result);
     if (visited && norm) visited.add(norm);
+    if (delayBetween > 0 && i < urlsToFetch.length - 1) await delay(delayBetween);
   }
 
   if (browser) await browser.close();

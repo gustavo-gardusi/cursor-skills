@@ -66,6 +66,12 @@ describe('crawl parseArgs', () => {
     const opts = parseArgs(['--seeds', 'https://x.com', '--visited-file', 'visited.txt']);
     assert.strictEqual(opts.visitedFile, 'visited.txt');
   });
+
+  test('parses --wait-after-load and --delay-between-pages', () => {
+    const opts = parseArgs(['--seeds', 'https://x.com', '--wait-after-load', '1500', '--delay-between-pages', '2500']);
+    assert.strictEqual(opts.waitAfterLoad, 1500);
+    assert.strictEqual(opts.delayBetweenPages, 2500);
+  });
 });
 
 describe('crawl isValidUrl', () => {

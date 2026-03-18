@@ -93,6 +93,12 @@ describe('fetch parseArgs', () => {
     const opts = parseArgs(['--visited-file', '/path/visited.txt', 'https://x.com']);
     assert.strictEqual(opts.visitedFile, '/path/visited.txt');
   });
+
+  test('parses --wait-after-load and --delay-between-pages', () => {
+    const opts = parseArgs(['--wait-after-load', '2000', '--delay-between-pages', '3000', 'https://x.com']);
+    assert.strictEqual(opts.waitAfterLoad, 2000);
+    assert.strictEqual(opts.delayBetweenPages, 3000);
+  });
 });
 
 describe('fetch fetchUrl', () => {

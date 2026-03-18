@@ -1,15 +1,15 @@
 ---
-name: research-execute
+name: execute
 description: >-
   Reads the implementation plan from .cursor/research-plan.md (or from the
   chat) and applies it to the repo: add, change, update files and run
   one-off commands. Mostly query from plan, change the current repo only.
-  Use after research-plan is done.
+  Use after plan is done.
 ---
 
-# Research execute (query plan; change repo only)
+# Execute (query plan; change repo only)
 
-**Goal:** **Mostly query from the plan** and **change the current repo.** Read the implementation plan from **`.cursor/research-plan.md`** (or from the user’s message). Apply it: add or change files, update/wire code, run one-off commands as specified in each chunk. **Only the repo (code/config) is modified**; do not change `.cursor/research-context.json` or `.cursor/research-plan.md`. Use after **research-plan** is done.
+**Goal:** **Mostly query from the plan** and **change the current repo.** Read the implementation plan from **`.cursor/research-plan.md`** (or from the user's message). Apply it: add or change files, update/wire code, run one-off commands as specified in each chunk. **Only the repo (code/config) is modified**; do not change `.cursor/research-context.json` or `.cursor/research-plan.md`. Use after **plan** is done.
 
 **Input:** Prefer **`.cursor/research-plan.md`**. If missing, use the plan the user pasted or provided in chat.
 
@@ -17,7 +17,7 @@ description: >-
 
 ## Plan file structure (what to parse)
 
-**research-plan** writes `.cursor/research-plan.md` with this structure:
+**plan** writes `.cursor/research-plan.md` with this structure:
 
 - **`## Relation to repo`** — Short paragraph (informational).
 - **`## Impact summary`** — Table: source/context → repo areas (informational).
@@ -40,7 +40,7 @@ Parse each **`### Chunk`** and apply the three bullet types in order. Respect an
 
 ## On invoke
 
-1. **Load the plan** — Read **`.cursor/research-plan.md`** if it exists. Else use the plan from the user’s message. Parse the markdown: `## Implementation plan`, then each `### Chunk N` with Run/one-off, Add/change, Update/wire.
+1. **Load the plan** — Read **`.cursor/research-plan.md`** if it exists. Else use the plan from the user's message. Parse the markdown: `## Implementation plan`, then each `### Chunk N` with Run/one-off, Add/change, Update/wire.
 2. **Apply each chunk** — In order (respect dependencies if the plan specifies order):
    - **Run / one-off:** Run the command if any (e.g. install deps, generate code).
    - **Add / change:** Create or edit the listed file(s) as specified.
@@ -67,5 +67,5 @@ Parse each **`### Chunk`** and apply the three bullet types in order. Respect an
 
 ## Notes
 
-- **Workflow:** **research-append** (only changes context file) → **research-plan** (only reads context + repo, writes plan file) → **research-execute** (only reads plan, changes repo).
+- **Workflow:** **search** (only changes context file) → **plan** (only reads context + repo, writes plan file) → **execute** (only reads plan, changes repo).
 - **Branch/PR:** Consider **gh-branch** or **start-task-jira** before executing; after changes, **gh-push** or **gh-pr**.
