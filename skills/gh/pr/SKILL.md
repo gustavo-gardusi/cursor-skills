@@ -10,21 +10,23 @@ description: >-
 
 **Sole purpose:** Create or update the pull request from the current branch to **main** (same repo) or **upstream** (fork). Check whether a PR already exists; summarize changes vs the base branch; write a strong description (emoji, tables, nested path lists, bold, memory/CPU); then create or update the PR. Does not add, commit, or push; does not sync or build—do those separately or with **gh-pull** / **gh-pr-review**.
 
-**Target:** Same repo → base `main`, head = current branch. Fork → base `upstream/main`, head = `FORK_OWNER:main` or `FORK_OWNER:$BRANCH`. On main with no upstream → there is no PR to create; stop.
+**Target:** Same repo → base `main`, head = current branch. Fork → base `upstream/main`, head = `FORK_OWNER:$BRANCH`. On main with no upstream → there is no PR to create; stop.
 
 ## On invoke
 
-Start immediately. Run commands one by one. Do not summarize. Focus only on: (1) whether a PR exists, (2) diff vs base, (3) description quality, (4) create or update the PR.
+Start immediately. Run commands one by one. Do not summarize. **First** determine fork vs same-repo and that upstream exists when it’s a fork; then (2) whether a PR exists, (3) diff vs base, (4) description quality, (5) create or update the PR.
 
 ## Workflow
 
-1. **Branch & base** — `BRANCH=$(git branch --show-current)`. If `BRANCH` is `main` and there is no upstream remote: there is no PR to create for “main → main”; stop. Otherwise set **base** = `upstream/main` if `git remote get-url upstream` exists, else **base** = `main`. For a fork, parse **UPSTREAM** (owner/repo) and **FORK_OWNER** (origin owner).
+1. **Fork vs same-repo (do this first)** — Run `git remote get-url upstream` (exit code 0 → upstream exists). If **upstream exists**: this repo is a **fork**; the PR targets the upstream repo. Set **base** = `upstream/main`, **UPSTREAM** = owner/repo from upstream URL (e.g. `https://github.com/gardusig/cursor-skills.git` → `gardusig/cursor-skills`), **FORK_OWNER** = owner from `git remote get-url origin` (e.g. `gustavo-gardusi`). If **upstream does not exist**: same-repo mode; **base** = `main`; no UPSTREAM or FORK_OWNER. **When the repo is a fork, upstream must be configured** — if the user intends to open a PR to the original repo but `upstream` is missing, stop and tell them to add it: `git remote add upstream https://github.com/ORIGINAL_OWNER/REPO.git`.
 
-2. **Check existing PR** — **Same repo:** `gh pr list --head $BRANCH --base main`. **Fork:** `gh pr list --repo $UPSTREAM --head $FORK_OWNER:$BRANCH` (or `$FORK_OWNER:main` when on main). Determine if a PR already exists; note its number (and URL if useful).
+2. **Branch & base** — `BRANCH=$(git branch --show-current)`. If `BRANCH` is `main` and same-repo (no upstream): there is no PR to create for “main → main”; stop. If fork: **head** = `$FORK_OWNER:$BRANCH` (or `$FORK_OWNER:main` when on main). If same-repo: **head** = `$BRANCH`.
 
-3. **Summarize changes vs base** — Run `git diff base...HEAD --name-status`. Group output by **Added**, **Modified**, **Deleted**. Use this to build the PR description (see below).
+3. **Check existing PR** — **Same repo:** `gh pr list --head $BRANCH --base main`. **Fork:** `gh pr list --repo $UPSTREAM --head $FORK_OWNER:$BRANCH` (or `$FORK_OWNER:main` when on main). Determine if a PR already exists; note its number (and URL if useful).
 
-4. **Create or update PR** — If a PR exists: `gh pr edit <number>` (same repo) or `gh pr edit <number> --repo $UPSTREAM` (fork) with `--title "..."` and `--body "..."`. If not: `gh pr create --base main --head $BRANCH` (same repo) or `gh pr create --repo $UPSTREAM --base main --head $FORK_OWNER:$BRANCH` (or `$FORK_OWNER:main` on main) with `--title "..."` and `--body "..."`. Use the description format below for the body. Title: one line, no emojis.
+4. **Summarize changes vs base** — Run `git diff base...HEAD --name-status`. Group output by **Added**, **Modified**, **Deleted**. Use this to build the PR description (see below).
+
+5. **Create or update PR** — If a PR exists: `gh pr edit <number>` (same repo) or `gh pr edit <number> --repo $UPSTREAM` (fork) with `--title "..."` and `--body "..."`. If not: `gh pr create --base main --head $BRANCH` (same repo) or `gh pr create --repo $UPSTREAM --base main --head $FORK_OWNER:$BRANCH` (or `$FORK_OWNER:main` on main) with `--title "..."` and `--body "..."`. Use the description format below for the body. Title: one line, no emojis.
 
 ---
 
@@ -63,5 +65,6 @@ Use the diff from step 3 (`base...HEAD`, `--name-status`). Write a **strong desc
 
 - Run from project root.
 - Prerequisites: `gh` CLI, `gh auth status`.
+- **Fork detection first:** If this repo is a fork, it **must** have an `upstream` remote pointing at the original repo. Without it, the skill cannot target the right repo. Add with: `git remote add upstream https://github.com/ORIGINAL_OWNER/REPO.git`.
 - **Branch must be pushed** for the PR to exist or to update the correct branch. Push first (e.g. with **gh-pull** or manually) if needed.
 - This skill does not add, commit, push, sync, or build. Use **gh-pull** to sync with main/upstream and get tests passing; use **gh-pr-review** to address comments and failed checks.
