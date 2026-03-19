@@ -2,8 +2,8 @@
 name: context-clear
 description: >-
   Clear research context and visited set: remove or truncate
-  .cursor/research-context.json and .cursor/research-visited.txt. Use when
-  starting fresh or resetting the research workflow. Does not modify the repo.
+  .cursor/research-context.json, .cursor/research-visited.txt.
+  Optionally .cursor/research-context.txt. Use when starting fresh or resetting the research workflow.
 ---
 
 # Context: clear

@@ -11,6 +11,7 @@ import { fileURLToPath } from 'url';
 import { clearContext } from '../clear.js';
 import { readContextSummary } from '../show.js';
 import { writeReadableContext } from '../write-readable.js';
+import { appendResult } from '../append-result.js';
 import { parseArgs, run as fetchRun } from '../../url/fetch.js';
 import { spawnSync } from 'child_process';
 
@@ -57,6 +58,30 @@ describe('context integration', () => {
       assert.strictEqual(readFileSync(visitedPath, 'utf8'), '');
       const contextTxtPath = join(root, TEST_CONTEXT_DIR, 'research-context.txt');
       assert.ok(!existsSync(contextTxtPath), 'clear should not create .txt');
+    } finally {
+      rmSync(root, { recursive: true });
+    }
+  });
+
+  test('append-result merges done result into context and updates visited', () => {
+    mkdirSync(TEST_TMP_BASE, { recursive: true });
+    const root = mkdtempSync(join(TEST_TMP_BASE, 'context-int-'));
+    const cursorDir = join(root, TEST_CONTEXT_DIR);
+    try {
+      clearContext(root, { contextDir: TEST_CONTEXT_DIR });
+      const out = appendResult(
+        { url: 'https://example.com/done', title: 'Done', text: 'x', ok: true },
+        root,
+        { contextDir: TEST_CONTEXT_DIR }
+      );
+      assert.ok(out);
+      assert.strictEqual(out.merged, 1);
+      const raw = JSON.parse(readFileSync(join(cursorDir, 'research-context.json'), 'utf8'));
+      assert.strictEqual(raw.results.length, 1);
+      assert.strictEqual(raw.results[0].url, 'https://example.com/done');
+      assert.ok(raw.lastFetched);
+      const visited = readFileSync(join(cursorDir, 'research-visited.txt'), 'utf8').trim().split(/\n/).filter(Boolean);
+      assert.ok(visited.includes('https://example.com/done'));
     } finally {
       rmSync(root, { recursive: true });
     }

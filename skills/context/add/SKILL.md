@@ -1,24 +1,77 @@
 ---
 name: context-add
 description: >-
-  Fetch pages from URLs (read-only; no interaction). Store results in
-  .cursor/research-context.json and a readable .cursor/research-context.txt.
-  Validate each result; prompt with Got/Expected/Waiting for/Recommendation and
-  retry or skip. Recommend user actions: login in tab, Slack in browser (not
-  app), unwrap thread / nested thread (depth 3), only relevant sublinks. Recorder
-  of pages for PRs, Jira, Slack; when done, recommend next links (depth limit 3).
-  Only this skill may change the context files. Does not modify the repo.
+  Follow destination pages with a connected Chrome session, monitor page transitions,
+  and only append to .cursor/research-context.json when expected content is visible.
+  Handle blockers (login/SSO/permissions/thread visibility), summarize each page state
+  as current vs expected, and keep user in control with clear next actions.
 ---
 
 # Context: add
 
-**Goal:** Fetch from a **flat list of URLs** using **fetch.js** with **Chrome already open**. The script **only loads each URL and extracts content** (title, text, links). It does **not** click, type, or interact with the page. Store results in **`.cursor/research-context.json`** (for reuse between skills) and **`.cursor/research-context.txt`** (readable, with spacing between pages for review). Always use **`--links --links-limit 15`** so each result includes **`links.best`**. After fetch, **evaluate** each result against expected content for that URL type; if something is missing, **prompt the user** with **Got / Expected / Waiting for / Recommendation** and **retry** or **skip**. Act as a **recorder of pages**: when you finish with one “entity” (e.g. a PR, a Jira task), say what was collected and **recommend which links to open next** and what to do to get there (e.g. “Open the Files changed tab”, “Go to the Actions run”, “Add the Slack thread URL”). Only this skill may change the context files. Does not modify the repo.
+**Goal:** Reach and verify destination pages one URL at a time.
+- Keep each provided URL in scope until expected content appears.
+- Detect blockers such as login/SSO/app mismatch/thread not opened.
+- Report each state as:
+  - **Current:** what the page shows now.
+  - **Expected:** what this URL should show when destination is ready.
+  - **Action:** what user needs to do next (login, open thread/view, retry, or skip).
 
+Use `--links --links-limit 15` to keep link context available, but do not enqueue more URLs from links automatically.
 **Prerequisite:** Chrome must be running with the shared profile and remote debugging. If not, run **@browser-open** first.
 
+**Single store for "done" pages:** **`.cursor/research-context.json`** holds **only pages that reached expected content** (or explicit terminal blockers such as hard 404 / permanent access blocks).
+
 **Output:**
-- **`.cursor/research-context.json`** — Canonical store: `{ results: [ { url, title, text, ok?, links?: { best } } ], lastFetched }`. Other skills (context-plan, context-show) read this.
-- **`.cursor/research-context.txt`** — Human-readable: one block per page with URL, title, text, and LINKS, separated by spacing for easier review. Generate after each fetch with `node {{base:scripts/context}}/write-readable.js` (or equivalent from repo path).
+- **`.cursor/research-context.json`** — Visited pages and their result; only entries that are done. Shape: `{ results: [ ... ], lastFetched }`.
+- **`.cursor/research-context.txt`** — Generated from JSON with `node {{base:scripts/context}}/write-readable.js`.
+
+---
+
+## Destination tracking flow
+
+1. **Collect input URLs** — One or many URLs from the user.
+2. **Open and observe** — Start or attach to Chrome with **`--connect-chrome`** and run fetch in observer mode.
+   - Use one tab per URL and keep the session open while the user fixes blockers.
+   - `node {{base:scripts/url}}/fetch.js --connect-chrome --observe --observe-ms 0 --observe-interval 2000 --links --links-limit 15 --visited-file .cursor/research-visited.txt URL`
+   - `--observe-ms 0` keeps the observer alive for the conversation; replace with a short ms value when needed.
+3. **Classify each snapshot** from the URL:
+   - **Login / SSO / permission blocker**: keep current state as blocker, do not append. Say:
+     - *Current:* "SSO page / auth prompt"
+     - *Expected:* "target destination page"
+     - *Action:* "Login in this tab, then reply **retry**."
+   - **Not yet destination** (e.g. Slack channel instead of full thread): keep current state as blocker and ask for exact view.
+   - **Destination reached** (destination-specific expected content): mark as done.
+4. **Append done pages** — For destination pages, run one final non-observe pass with `--out` so the final JSON has the expected result shape, then pass that JSON to **`append-result.js`**.
+   - Final pass example (more data):
+   - `node {{base:scripts/url}}/fetch.js --connect-chrome --links --links-limit 50 --out /tmp/fetch-out.json <destination url>`
+5. **Report and continue** — On each update, send a compact status update in the format:
+   - `tab #N: current = A, expected = B, do = C`.
+
+To close tabs automatically after a destination is recognized, append `--observe-close-on-destination` (optional and mostly useful when `--connect-chrome` is not used).
+
+## Destination expectations by URL type
+
+- **GitHub PR (`/pull/`)**
+  - **Expected:** PR title, conversation, status, and comment context.
+  - **Blockers to expect:** login/SSO, permission popup, or PR landing on a list or summary page instead of target PR.
+  - **Recommended action:** keep browser on the PR URL, complete login if needed, and then reply **ready**.
+- **GitHub Actions run (`/actions/runs/` or `/job/`)**
+  - **Expected:** status summary and job list, ideally from the specific run/job linked by the ticket.
+  - **Blockers to expect:** private repo login, org SSO, or stale cookie page.
+  - **Recommended action:** complete authentication and confirm you are on the exact run/job page before reply **ready**.
+- **Jira issue (`/browse/`)**
+  - **Expected:** issue key/title, summary, status, description, comment stream, and linked PR/dependency fields.
+  - **Blockers to expect:** Jira login, MFA, or board view instead of issue card.
+  - **Recommended action:** open the issue URL directly and wait for the issue body/details pane to render, then reply **ready**.
+- **Slack channel (`/archives/...`)**
+  - **Expected:** channel message list with recent messages visible.
+  - **Blockers to expect:** Slack desktop app capture, workspace sign-in, or channel not loaded.
+  - **Recommended action:** keep thread in Chrome and load the channel in browser; then reply **ready**.
+- **Slack thread permalink (`/archives/.../p...`)**
+  - **Expected:** parent message + replies visible in one thread context.
+  - **Blockers to expect:** only channel view, collapsed thread, or missing context.
+  - **Recommended action:** click **View thread** / replies until visible, then reply **ready**.
 
 ---
 
@@ -30,13 +83,14 @@ description: >-
 
 ## Using the browser (already open)
 
-fetch.js attaches to the existing Chrome via **`--connect-chrome`** (default localhost:9222). It does **not** launch or close Chrome. The same profile used by **@browser-open** is shared across all projects; only **`.cursor/`** (context, visited, failed, plan) is repo-specific.
+fetch.js attaches to the existing Chrome via **`--connect-chrome`** (default localhost:9222). In **observer mode** it opens each input URL in a dedicated tab and emits updates as pages load and navigate. Use it to keep track of blockers while the user is fixing the view. It does not close Chrome and does not perform clicks on behalf of the user.
+If you run `fetch.js` without `--connect-chrome`, it starts a dedicated browser session and closes it once all provided links are done.
 
 ---
 
 ## Interactivity: what to recommend (user does the clicks)
 
-The script is **read-only**; the **user** must perform clicks and navigation. Before or after fetch, **recommend specific actions** so the right content is visible in Chrome. Keep a **depth limit of 3** and only **relevant sublinks**.
+The script is **read-only**; the **user** must perform clicks and navigation. Before or after fetch/observe, **recommend specific actions** so the right content is visible in Chrome. Keep recommendations focused on **relevant next actions** (not broad link chasing).
 
 ### Login
 
@@ -46,11 +100,11 @@ If a result shows a login page, or fetch fails with auth/redirect, recommend: *"
 
 Slack must be open in **Chrome** (browser), not the Slack desktop app. Recommend: *"Open Slack in the **browser** (e.g. app.slack.com or your workspace URL). The fetch script attaches to Chrome and can only capture pages in that browser."* If the user shares a slack.com URL but has the app open, ask them to open the same link in Chrome.
 
-### Unwrap thread; nested thread (depth limit 3)
+### Unwrap thread; nested thread
 
 - **Thread:** For a thread permalink, recommend: *"Click **View thread** or the **replies** count so the full thread (parent + replies) is visible. Wait for it to load, then say **ready**."*
-- **Nested thread:** If the discussion has a **reply that itself has replies** (nested thread), and it's relevant, recommend: *"Click into that nested thread so its replies are visible. I'll capture up to **depth 3** (channel → thread → nested thread). When visible, say **ready**."*
-- **Depth limit:** Recommend following at most **3 levels** from the start (e.g. channel → thread → nested thread; or PR → Files changed → Actions job). Beyond that, say *"Collected everything needed from this branch"* and suggest moving to another entity (e.g. Jira, different PR) instead of deeper links.
+- **Nested thread:** If the discussion has a **reply that itself has replies** (nested thread), and it's relevant, recommend: *"Click into that nested thread so its replies are visible. When visible, say **ready**."*
+- **Scope:** Capture the target thread and one adjacent context link unless the user asks for broader exploration.
 
 ### Only relevant sublinks
 
@@ -65,6 +119,18 @@ Script path: **`{{base:scripts/url}}`** (replaced at install with the actual rep
 - **fetch.js** — Flat list of URLs. Attaches to Chrome, **loads** each page (no interaction), extracts title, text, and **links**. **Retries** each URL on non-OK response (default 3 retries, 2s apart). **Always** use **`--links --links-limit 15`** so each result includes **`links.best`**.
 
 **Always use:** **`--visited-file .cursor/research-visited.txt`**, **`--failed-file .cursor/research-failed.txt`**, and **`--links --links-limit 15`**.
+
+---
+
+## Agent response after fetch or validation
+
+After each fetch run (and when validating results), respond with:
+
+1. **Summary of what you can see** — Short description of what the captured page actually contains (title, main text cues, or “about:blank” / empty if the page did not load). This is the **Got**.
+2. **What was expected** — For that URL type (see Expected content table), what we expect to see (e.g. “PR Conversation with description and comments”, “full Slack thread with replies”).
+3. **Recommendation** — What needs to be done to get there: e.g. “Ensure the Conversation tab is selected and say **retry**”, “Click **View thread** so replies are visible, then say **retry**”, “Log in in this tab and say **ready**”.
+
+Use this format even when the result is OK (brief Got + Expected match + “No action needed” or next-link recommendation). When the result does **not** match, use the same three parts and end with: *“Reply **retry** when ready, or **skip** to skip this URL.”*
 
 ---
 
@@ -138,7 +204,7 @@ After validating a result (and optionally writing the readable .txt), you may su
 - **From Jira:** Link to **Slack** channel/thread, **PR**, or **Confluence** if present in the ticket. *"Open the Slack channel linked in the description and share the URL when ready."*
 - **From Slack:** If the thread references a PR or Jira, *"To add the PR/Jira mentioned here, share that URL next."*
 
-Always tell the user **what to do** (which tab to open, which link to copy, or to say **ready** / **retry**). Keep **depth limit 3** and recommend only **relevant sublinks** (see **Interactivity**).
+Always tell the user **what to do** (which tab to open, which link to copy, or to say **ready** / **retry**). Recommend only **relevant sublinks** (see **Interactivity**).
 
 ---
 
@@ -171,33 +237,37 @@ After each fetch run:
 
 ## Commands (from workspace root)
 
-`mkdir -p .cursor`. Run with **`--connect-chrome`** (Chrome must already be open via **@browser-open**).
+`mkdir -p .cursor`. Chrome must already be open via **@browser-open**; use **`--connect-chrome`** for fetch.
 
-**Fetch (multiple URLs, with links; read-only):**
+**Monitor destination readiness and append when done:**
 ```bash
-node {{base:scripts/url}}/fetch.js --connect-chrome --links --links-limit 15 --wait-after-load 3000 --delay-between-pages 1000 --out .cursor/research-context.json --visited-file .cursor/research-visited.txt --failed-file .cursor/research-failed.txt --retries 3 --compact [--append] URL1 URL2
+node {{base:scripts/url}}/fetch.js --connect-chrome --observe --observe-ms 0 --observe-interval 2000 --links --links-limit 15 --wait-after-load 3000 --visited-file .cursor/research-visited.txt --failed-file .cursor/research-failed.txt --retries 3 --compact URL
+```
+For Slack URLs use **`--wait-after-load 5000`**.  
+Use **`--observe`** when blockers are likely (login, permissions, wrong view).
+
+**When result is done (success or 404/unfixable), merge into context:**
+```bash
+node {{base:scripts/context}}/append-result.js --file /tmp/fetch-out.json
+# or: echo '{"results":[...]}' | node {{base:scripts/context}}/append-result.js
 ```
 
-**For Slack URLs** use a longer wait:
-```bash
-node {{base:scripts/url}}/fetch.js --connect-chrome --links --links-limit 15 --wait-after-load 5000 --delay-between-pages 1000 --out .cursor/research-context.json --visited-file .cursor/research-visited.txt --failed-file .cursor/research-failed.txt --retries 3 --compact [--append] SLACK_URL
-```
-
-**After fetch, write readable .txt:**
+**After run, write readable .txt:**
 ```bash
 node {{base:scripts/context}}/write-readable.js
 ```
-(Or from repo: `node scripts/context/write-readable.js` with CURSOR_ROOT set to workspace root.)
 
 ---
 
 ## On invoke
 
 1. Ensure Chrome is open with the shared profile (if not, direct the user to **@browser-open**).
-2. **Normalize URLs and interactivity:** GitHub — use as-is. Jira — browser URL (atlassian.net). Slack — **browser URL only**; recommend **Slack in the browser** (not the desktop app). For **Slack thread** URLs: recommend unwrapping the thread (click **View thread** / replies); if there's a relevant **nested thread**, recommend opening it (depth limit 3). When suggesting next links, use **only relevant sublinks** and **depth limit 3** (see **Interactivity**). For thread: *"I'm waiting for the **full thread** (parent + all replies) to be visible. Click **View thread** or the replies count, wait for the thread to load, then say **ready**."* For channel: waiting for messages, then **ready**. If a page requires login, recommend logging in in that tab and saying **ready**.
-3. Run **fetch.js** with **`--connect-chrome`**, **`--links --links-limit 15`**, **`--visited-file .cursor/research-visited.txt`**, **`--failed-file .cursor/research-failed.txt`**, **`--retries 3`**. Use **`--wait-after-load 5000`** for all Slack URLs.
-4. **Validate** each result. For Slack, treat **thread** URLs as needing reply content (multiple messages); **channel** URLs as needing message list. When a result does not match, show **Got** / **Expected** / **Waiting for** / **Recommendation**, then ask for **retry** or **skip**. For Slack thread when only channel view was captured: recommend clicking **View thread** or the **replies** button and waiting for the full thread. If **retry**, run fetch again (Slack: `--wait-after-load 5000`) and re-validate. Repeat until pass or skip.
-5. Run **write-readable.js** to generate **`.cursor/research-context.txt`** with spacing between pages. Summarize what was stored and list **links.best** per page. Apply **recorder of pages**: for each "entity" (PR, Jira task, etc.) you finished, say *"Collected everything needed from this [PR / Jira / …] page"* and **recommend which links to open next** and **what to do** (e.g. "Open the Files changed tab and say **ready**", "Open the Jira ticket and add the URL", "If the ticket mentions a Slack channel, open it and share the URL"). If any URLs are in `.cursor/research-failed.txt`, list them and suggest logging in and re-running. Suggest **@context-show** to confirm.
+2. **Normalize URLs:** GitHub — use as-is. Jira — browser URL (atlassian.net). Slack — **browser URL only** (not the desktop app). For **Slack thread**: user must open the thread (View thread / replies) so full discussion is visible; say **ready** when ready.
+3. For each URL, run fetch in observer mode for a conversational window (`--observe` + `--observe-ms`, usually `0`) and classify the current snapshot using destination expectations.
+   - If blocked (SSO/login/app mismatch/thread not opened), report blocker and ask for user action.
+   - If destination is reached, run a final fetch with `--out` and then apply **append-result.js**.
+4. Use **`--wait-after-load 5000`** for Slack URLs. Validate against the Expected content table; treat missing content as "not there yet" (user opens thread / tab, then **ready**).
+5. When all requested URLs are evaluated (or user stops), run **write-readable.js**, summarize what was stored, and suggest **@context-show** to confirm.
 
 ---
 
@@ -206,6 +276,6 @@ node {{base:scripts/context}}/write-readable.js
 - [ ] Context: **.cursor/research-context.json** and **.cursor/research-context.txt** present; each result has **links.best** when the page had links; no repo files changed.
 - [ ] Fetch was **read-only** (no interaction with pages).
 - [ ] Results were validated; user was prompted (Got/Expected/Waiting for/Recommendation) to retry or skip when content didn’t match.
-- [ ] Interactivity: when needed, recommended **login** (in tab), **Slack in browser** (not app), **unwrap thread / nested thread** (depth 3), and only **relevant sublinks** (depth limit 3).
+- [ ] Interactivity: when needed, recommended **login** (in tab), **Slack in browser** (not app), **unwrap thread / nested thread**, and only **relevant sublinks**.
 - [ ] Recorder of pages: when done with a PR or Jira (or other entity), stated what was collected and recommended **next links** with **what to do** (e.g. open Files changed, open Actions run, add Slack URL).
 - [ ] Next: **context-show** for summary; **context-plan** reads context (read-only) and writes `.cursor/research-plan.md`.

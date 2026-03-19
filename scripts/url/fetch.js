@@ -21,6 +21,12 @@
  *   --links                 Extract links from each page; output includes links.all and links.best
  *   --links-limit <n>       Max "best" links per page (default: 50)
  *   --links-same-site       Keep only same-site links in "best" (default: true when --links)
+ *   --observe               Open each input URL in its own tab and stream page-change snapshots (good for manual login/SSO/manual interaction).
+ *   --observe-ms <ms>       How long to keep observer tabs open (default: 120000). If 0, it stays open until you stop the script.
+ *   --observe-interval <ms>  Poll for updates and emit periodic snapshots (default: 2000).
+ *   --observe-text-limit <n> Max text size in monitor snapshots (default: 1600).
+ *   --observe-close-on-destination Close tab automatically when destination signal is detected for that URL.
+ *   --observe-match-threshold <n> Number of destination signals that must match before tab is considered done (default: 1).
  *   --visited-file <path>   Load/save visited URLs (one per line); skip already visited, append and write at end
  *   --wait-after-load <ms>  After load event, wait this many ms before extracting (default: 0; use 3000 for SPAs). Should be > delay-between-pages.
  *   --delay-between-pages <ms>  Wait this many ms between each page (default: 0). Use 0 when using --confirm-each-page.
@@ -78,6 +84,76 @@ function sameOrigin(a, b) {
   return sameSite(a, b);
 }
 
+function summarizeText(text, limit = 1800) {
+  if (!text) return null;
+  const collapsed = String(text).replace(/\s+/g, ' ').trim();
+  if (!collapsed) return null;
+  return collapsed.length <= limit ? collapsed : `${collapsed.slice(0, limit)}...`;
+}
+
+function destinationSignalsForUrl(url) {
+  const u = (url || '').toLowerCase();
+  if (u.includes('/pull/')) {
+    return ['pull', 'conversation', 'review', 'files changed', 'checks', 'merge'];
+  }
+  if (u.includes('/actions/runs/') || u.includes('/job/')) {
+    return ['run', 'workflow', 'job', 'summary', 'checks', 'succeeded', 'failed'];
+  }
+  if (u.includes('/browse/')) {
+    return ['description', 'assignee', 'comments', 'details', 'acceptance', 'key'];
+  }
+  if (u.includes('/archives/') && /\/p\d+/i.test(u)) {
+    return ['thread', 'replies', 'reply', 'view thread', 'parent'];
+  }
+  if (u.includes('/archives/')) {
+    return ['channel', 'messages', 'message', 'workspace', 'threads'];
+  }
+  return [];
+}
+
+function isDestinationReached(snapshot, url, threshold = 1) {
+  const signals = destinationSignalsForUrl(url);
+  if (!signals.length) return false;
+  const haystack = `${snapshot.title || ''} ${snapshot.text || ''}`.toLowerCase();
+  const matches = signals.filter((signal) => haystack.includes(signal));
+  return matches.length >= threshold;
+}
+
+/**
+ * Capture a concise page snapshot for monitoring.
+ */
+async function capturePageSnapshot(page, tabIndex, originalUrl, opts) {
+  const snapshot = {
+    tab: tabIndex + 1,
+    originalUrl,
+    currentUrl: null,
+    title: null,
+    text: null,
+    error: null,
+    at: new Date().toISOString(),
+    event: 'snapshot',
+  };
+  try {
+    snapshot.currentUrl = page.url();
+  } catch {
+    snapshot.currentUrl = originalUrl;
+  }
+  try {
+    snapshot.title = await page.title();
+  } catch (err) {
+    snapshot.error = err.message || 'Unable to read page title';
+  }
+  try {
+    const sel = opts.selector || 'body';
+    const el = await page.$(sel);
+    const raw = el ? await el.innerText() : '';
+    snapshot.text = summarizeText(raw, opts.observeTextLimit ?? 1600);
+  } catch (err) {
+    snapshot.error = snapshot.error || err.message || 'Unable to read page text';
+  }
+  return snapshot;
+}
+
 /**
  * Extract links from page and return { all, best }.
  * all: valid http(s) links, normalized (no hash), deduped.
@@ -131,6 +207,12 @@ export function parseArgs(args = argv.slice(2)) {
     confirmEachPage: false,
     retries: 3,
     failedFile: null,
+    observe: false,
+    observeMs: 120000,
+    observeInterval: 2000,
+    observeTextLimit: 1600,
+    observeCloseOnDestination: false,
+    observeMatchThreshold: 1,
   };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -172,6 +254,28 @@ export function parseArgs(args = argv.slice(2)) {
         break;
       case '--no-links-same-site':
         opts.linksSameSite = false;
+        break;
+      case '--observe':
+        opts.observe = true;
+        if (args[i + 1] && !args[i + 1].startsWith('--') && !Number.isNaN(parseInt(args[i + 1], 10))) {
+          opts.observeMs = parseInt(args[i + 1], 10);
+          i += 1;
+        }
+        break;
+      case '--observe-ms':
+        opts.observeMs = parseInt(args[++i], 10) || 120000;
+        break;
+      case '--observe-interval':
+        opts.observeInterval = parseInt(args[++i], 10) || 2000;
+        break;
+      case '--observe-text-limit':
+        opts.observeTextLimit = parseInt(args[++i], 10) || 1600;
+        break;
+      case '--observe-close-on-destination':
+        opts.observeCloseOnDestination = true;
+        break;
+      case '--observe-match-threshold':
+        opts.observeMatchThreshold = parseInt(args[++i], 10) || 1;
         break;
       case '--visited-file':
         opts.visitedFile = args[++i];
@@ -247,6 +351,164 @@ export async function fetchUrl(page, url, opts) {
   return result;
 }
 
+async function runObserveMode(opts, deps = {}) {
+  const timeout = opts.timeout || 30_000;
+  const waitUntil = opts.waitUntil || 'load';
+  const write = deps.writeOutput ?? ((str, path) => {
+    if (path) {
+      writeFileSync(path, str);
+    } else {
+      console.log(str);
+    }
+  });
+
+  let browser;
+  let context;
+  if (deps.getBrowser) {
+    browser = await deps.getBrowser();
+    const ctx = browser.contexts?.()?.[0] || (await browser.newContext?.());
+    context = ctx;
+  } else if (opts.connectChrome) {
+    const cdp = opts.cdpUrl || CDP_URL;
+    browser = await chromium.connectOverCDP(cdp);
+    context = browser.contexts()[0] || await browser.newContext();
+  } else {
+    browser = await chromium.launchPersistentContext(CHROME_DEBUG_PROFILE, { channel: 'chrome', headless: false });
+    context = browser;
+  }
+
+  const durationMs = opts.observeMs ?? 120000;
+  const pollMs = opts.observeInterval || 2000;
+  const observed = [];
+  const seen = new Map();
+  const pages = [];
+  const doneTabs = new Set();
+  const visited = getVisitedSet(opts, deps);
+  const threshold = Math.max(1, opts.observeMatchThreshold || 1);
+
+  const emit = (entry) => {
+    if (!entry) return;
+    if (entry.tab == null || entry.currentUrl == null) return;
+    const key = `${entry.tab}|${entry.currentUrl}|${entry.title || ''}|${entry.text || ''}`;
+    const last = seen.get(entry.tab);
+    if (last === key) return;
+    seen.set(entry.tab, key);
+    observed.push(entry);
+    if (!deps.getBrowser) {
+      // Keep one-line events in compact mode for easy consumption while monitoring.
+      console.log(opts.compact ? JSON.stringify(entry) : JSON.stringify(entry, null, 2));
+    }
+  };
+
+  const maybeCloseTab = async (tabIndex, page, done) => {
+    if (!done || doneTabs.has(tabIndex)) return;
+    doneTabs.add(tabIndex);
+    if (!opts.observeCloseOnDestination) return;
+    try {
+      await page.close?.();
+    } catch {
+      /* best effort */
+    }
+  };
+
+  const schedule = (page, tabIndex, originalUrl) => {
+    let queued = false;
+    return async () => {
+      if (queued) return;
+      queued = true;
+      await delay(pollMs);
+      try {
+        const entry = await capturePageSnapshot(page, tabIndex, originalUrl, opts);
+        const isDestination = isDestinationReached(entry, originalUrl, threshold);
+        if (isDestination) {
+          void maybeCloseTab(tabIndex, page, true);
+        }
+        emit(entry);
+      } finally {
+        queued = false;
+      }
+    };
+  };
+
+  try {
+    for (let i = 0; i < opts.urls.length; i++) {
+      const originalUrl = opts.urls[i];
+      const normalized = normalizeVisitedUrl(originalUrl);
+      if (visited && normalized && visited.has(normalized)) {
+        emit({
+          tab: i + 1,
+          originalUrl,
+          currentUrl: originalUrl,
+          title: null,
+          text: null,
+          event: 'skipped',
+          at: new Date().toISOString(),
+          error: 'already visited',
+        });
+        continue;
+      }
+      const page = await context.newPage();
+      pages.push(page);
+
+      const pushSnapshot = schedule(page, i, originalUrl);
+      page.on('framenavigated', () => {
+        void pushSnapshot();
+      });
+      page.on('load', () => {
+        void pushSnapshot();
+      });
+
+      try {
+        await page.goto(originalUrl, { waitUntil, timeout });
+        if (opts.waitAfterLoad > 0) await delay(opts.waitAfterLoad);
+        const snap = await capturePageSnapshot(page, i, originalUrl, opts);
+        emit(snap);
+      } catch (err) {
+        emit({
+          tab: i + 1,
+          originalUrl,
+          currentUrl: originalUrl,
+          title: null,
+          text: null,
+          error: err.message || String(err),
+          at: new Date().toISOString(),
+          event: 'snapshot',
+        });
+      }
+    }
+
+    if (durationMs === 0) {
+      await new Promise(() => {});
+    }
+    if (durationMs > 0) {
+      await delay(durationMs);
+    }
+  } finally {
+    if (!opts.connectChrome) {
+      for (const page of pages) {
+        try {
+          await page.close?.();
+        } catch {
+          /* best effort */
+        }
+      }
+    }
+    if (browser && !opts.connectChrome) await browser.close();
+  }
+
+  const out = {
+    observed: observed.length,
+    tabs: pages.length,
+    events: observed,
+    tabsDone: doneTabs.size,
+  };
+
+  const payload = opts.out ? (opts.compact ? JSON.stringify(out) : JSON.stringify({ ...out, generatedAt: new Date().toISOString() }, null, 2)) : null;
+  if (opts.out) write(payload, opts.out);
+
+  return out;
+}
+
 /**
  * Run fetch: all requests use a browser (Chrome or injected getBrowser for tests).
  * @param {object} opts - Parsed options (urls, waitUntil, timeout, selector, out, etc.)
@@ -254,6 +516,10 @@ export async function fetchUrl(page, url, opts) {
  * @returns {{ fetched: number, results: Array }} Result object; caller may write to opts.out or stdout.
  */
 export async function run(opts, deps = {}) {
+  if (opts.observe) {
+    return runObserveMode(opts, deps);
+  }
+
   if (!opts.urls.length) {
     const msg = 'Usage: node fetch.js [--connect-chrome] [--urls-file FILE] [--out FILE] url1 [url2 ...]';
     if (deps.getBrowser) throw new Error(msg);
@@ -271,7 +537,8 @@ export async function run(opts, deps = {}) {
     const cdp = opts.cdpUrl || CDP_URL;
     browser = await chromium.connectOverCDP(cdp);
     const context = browser.contexts()[0] || await browser.newContext();
-    page = await context.newPage();
+    // Use the tab the user already sees so the browser opens on the target page and stays there
+    page = context.pages()[0] || await context.newPage();
   } else {
     browser = await chromium.launchPersistentContext(CHROME_DEBUG_PROFILE, { channel: 'chrome', headless: false });
     page = browser.pages()[0] || await browser.newPage();
@@ -321,7 +588,8 @@ export async function run(opts, deps = {}) {
   }
   if (confirmRl) confirmRl.close();
 
-  if (browser) await browser.close();
+  // When attaching to existing Chrome, leave it open on the last page; only close if we launched it
+  if (browser && !opts.connectChrome) await browser.close();
 
   if (visited && opts.visitedFile) {
     const write = deps.writeFileSync ?? writeFileSync;
@@ -337,17 +605,30 @@ export async function run(opts, deps = {}) {
     }
   }
 
-  let out = { fetched: results.length, results, failed };
+  const lastFetched = new Date().toISOString();
+  let out = { results, lastFetched, failed, fetched: results.length };
   const exists = deps.existsSync ?? existsSync;
   const readFile = deps.readFileSync ?? readFileSync;
   if (opts.append && opts.out && exists(opts.out)) {
     try {
       const existing = JSON.parse(readFile(opts.out, 'utf8'));
       const prev = existing.results || [];
+      // Dedupe by normalized URL so we keep a single canonical entry per URL (last wins)
+      const byUrl = new Map();
+      for (const r of prev) {
+        const n = normalizeUrl(r.url, r.url);
+        if (n) byUrl.set(n, r);
+      }
+      for (const r of results) {
+        const n = normalizeUrl(r.url, r.url);
+        if (n) byUrl.set(n, r);
+      }
+      const merged = [...byUrl.values()];
       out = {
-        fetched: prev.length + results.length,
-        results: [...prev, ...results],
+        results: merged,
+        lastFetched,
         failed: out.failed,
+        fetched: merged.length,
       };
     } catch {
       /* ignore parse errors; overwrite with current run */

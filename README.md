@@ -16,6 +16,14 @@ Markdown instructions the Cursor agent follows (e.g. add context from URLs, crea
 | **List of skills** | [Skills](#skills) |
 | **Sync, url scripts, Chrome, coverage** | [scripts/README.md](scripts/README.md) |
 
+## Repo structure and purpose
+
+This repo is split into two layers:
+
+- `skills/` contains agent workflows triggered via Cursor (`@skill-name`), mainly instructions and orchestration.
+- `scripts/` contains shared CLI tooling those workflows call (`sync`, `fetch`, context utilities).
+- `.github/` holds CI to run script tests and enforce coverage.
+
 ---
 
 ## Setup (macOS, M chip)
@@ -45,7 +53,7 @@ In **Cursor chat** (Composer or regular chat), reference a skill so the agent fo
 ### Research flow (context + browser)
 
 1. **@browser-open** — Open Chrome with a **shared profile** (same for all projects). Create the profile dir if missing; log in once and leave Chrome running.
-2. **@context-add** — Uses that browser via `--connect-chrome`: fetches pages from URLs, extracts content and a **list of found links** per page (`--links`), writes `.cursor/research-context.json`. Handles GitHub (repo, PR, Actions), Jira, Slack (use web URL), and other sites with per-site instructions.
+2. **@context-add** — Uses that browser via `--connect-chrome`: monitor destination pages in real time, validate what the page currently shows vs what is expected, and write done pages to `.cursor/research-context.json`. Handles GitHub (repo, PR, Actions), Jira, Slack (use web URL), and other sites with per-site instructions.
 3. **@context-plan** — Reads the context and the **current codebase** (read-only); compares and writes a plan to `.cursor/research-plan.md`. Use for research vs repo, **PR review** (address comments), **failing tests**, or any “plan ahead” task.
 4. **@context-show** — **Summarizes** the context (count, lastFetched, URLs). Use after add to confirm what was stored.
 5. **@context-execute** — Reads the plan and applies changes to the repo. **@context-clear** clears context and visited to start fresh. **@browser-close** closes Chrome (graceful then force if needed).
@@ -61,9 +69,9 @@ Browser skills live under **`skills/browser/`** (neighbor of `context/`); they a
 
 **Context** (`skills/context/`):
 
-- **@context-add** — Fetch from URLs with Chrome already open; always use `--links` so each result includes a list of found links. Per-site rules for GitHub (repo/PR/Actions), Jira, Slack (browser URL). Recommends user actions: login in tab, Slack in browser (not app), unwrap thread / nested thread (depth 3), only relevant sublinks. Recorder of pages: when done with a page, recommends next links (depth limit 3). Writes `.cursor/research-context.json`. Only this skill may change the context file.
+- **@context-add** — Fetch from URLs with Chrome already open; validate blockers vs destination (login, SSO, wrong tab/view) and report `current / expected / action`. Per-site rules for GitHub (repo/PR/Actions), Jira, Slack (browser URL). Recommends user actions: login in tab, Slack in browser (not app), open thread/view. Writes `.cursor/research-context.json` only when destination is reached. Only this skill may change the context file.
 - **@context-show** — Show context summary (count, lastFetched, URLs). Use after context-add to confirm.
-- **@context-clear** — Clear `.cursor/research-context.json` and `.cursor/research-visited.txt` to start fresh.
+- **@context-clear** — Clear `.cursor/research-context.json`, `.cursor/research-context.txt`, and `.cursor/research-visited.txt` to start fresh.
 - **@context-plan** — Read context + repo (read-only); write `.cursor/research-plan.md`. Use for research vs codebase, **PR review** (gather comments, compare with code, plan minimal changes), **failing tests**, or large information vs repo.
 - **@context-execute** — Read the plan and apply it to the repo.
 
