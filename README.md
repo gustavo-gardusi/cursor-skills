@@ -61,7 +61,7 @@ Browser skills live under **`skills/browser/`** (neighbor of `context/`); they a
 
 **Context** (`skills/context/`):
 
-- **@context-add** — Fetch from URLs with Chrome already open; always use `--links` so each result includes a list of found links. Per-site rules for GitHub (repo/PR/Actions), Jira, Slack (browser URL). Writes `.cursor/research-context.json`. Only this skill may change the context file.
+- **@context-add** — Fetch from URLs with Chrome already open; always use `--links` so each result includes a list of found links. Per-site rules for GitHub (repo/PR/Actions), Jira, Slack (browser URL). Recommends user actions: login in tab, Slack in browser (not app), unwrap thread / nested thread (depth 3), only relevant sublinks. Recorder of pages: when done with a page, recommends next links (depth limit 3). Writes `.cursor/research-context.json`. Only this skill may change the context file.
 - **@context-show** — Show context summary (count, lastFetched, URLs). Use after context-add to confirm.
 - **@context-clear** — Clear `.cursor/research-context.json` and `.cursor/research-visited.txt` to start fresh.
 - **@context-plan** — Read context + repo (read-only); write `.cursor/research-plan.md`. Use for research vs codebase, **PR review** (gather comments, compare with code, plan minimal changes), **failing tests**, or large information vs repo.
