@@ -1,54 +1,40 @@
 ---
 name: context-add
 description: >-
-  Fetch pages from links using url scripts with real Chrome; write or append to
-  .cursor/research-context.json. Only this skill may change the context file.
+  Fetch pages from links using url scripts with an already-open Chrome; write or
+  append to .cursor/research-context.json. Only this skill may change the context file.
   Use --visited-file to avoid revisiting; failed URLs go to research-failed.txt.
   Does not modify the repo.
 ---
 
-# Context: add (Chrome only)
+# Context: add
 
-**Goal:** Fetch from seed URLs using the **url scripts** (fetch.js or crawl.js) with **real Chrome**, and write or append to **`.cursor/research-context.json`**. Use **`.cursor/research-visited.txt`** so already-visited URLs are skipped. URLs that still fail after retries (e.g. 404, login required) are written to **`.cursor/research-failed.txt`** and are **not** marked visited, so you can log in and re-run. Only this skill may change the context file. Does not modify the repo.
+**Goal:** Fetch from seed URLs using the **url scripts** (fetch.js or crawl.js) with **Chrome already open**, then write or append to **`.cursor/research-context.json`**. Use **`.cursor/research-visited.txt`** so already-visited URLs are skipped. URLs that still fail after retries (e.g. 404, login required) are written to **`.cursor/research-failed.txt`** and are **not** marked visited, so you can log in and re-run. Only this skill may change the context file. Does not modify the repo.
 
-**Output:** `.cursor/research-context.json` with `{ results: [ { url, title, text, ok?, links? } ], lastFetched }`. Optionally `.cursor/research-visited.txt` (one URL per line) and `.cursor/research-failed.txt` (URLs that failed after retries; may need login).
+**Prerequisite:** Chrome must be running with the shared profile and remote debugging. If not, run **@browser-open** first. Browser management lives in **@browser-open** and **@browser-close** (neighbor of context, shared across all projects).
 
----
-
-## Shared profile (one for all repos)
-
-Chrome uses a **single profile** across all projects: **`~/.chrome-debug-profile`**. Log in once (e.g. GitHub, internal docs) and reuse it everywhere. The only things **private to this repo** are under **`.cursor/`**: the context file (add), the visited list, the failed list, and the plan/reasoning (context-plan). Add `.cursor/` to `.gitignore`.
+**Output:** `.cursor/research-context.json` with `{ results: [ { url, title, text, ok?, links? } ], lastFetched }`. Optionally `.cursor/research-visited.txt` and `.cursor/research-failed.txt`.
 
 ---
 
-## Open Chrome (optional but recommended)
+## Using the browser (already open)
 
-To use a **logged-in** session or to keep Chrome open across runs:
-
-1. **Open Chrome** with the shared profile and remote debugging (run once per session):
-   ```bash
-   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --remote-debugging-port=9222 --user-data-dir="$HOME/.chrome-debug-profile"
-   ```
-   (On Linux/Windows use the same flags with your Chrome path.) Log in to the sites you need in this window.
-2. Run the url script with **`--connect-chrome`** so it attaches to this instance instead of launching its own. The script will **not** close Chrome when it finishes.
-3. **Close Chrome** when you are done (or leave it open for other projects). Just close the window; no separate quit command needed.
-
-If you omit this step, the script can launch Chrome itself with the same profile, fetch, then close it when done.
+Scripts attach to the existing Chrome via **`--connect-chrome`** (default localhost:9222). They do **not** launch or close Chrome. The same profile used by **@browser-open** is shared across all projects; only **`.cursor/`** (context, visited, failed, plan) is repo-specific.
 
 ---
 
-## Chrome (url scripts)
+## Url scripts (fetch and content extraction)
 
 Scripts live at **`{{base:scripts/url}}`** (replaced at install with the actual path).
 
-- **fetch.js** — Flat list of URLs; with `--connect-chrome` attaches to existing Chrome; otherwise launches Chrome, fetches, then closes it.
-- **crawl.js** — BFS by rounds (seeds → next layer); same behaviour.
+- **fetch.js** — Flat list of URLs; attaches to existing Chrome, fetches each page, extracts title and text (and optional links), writes JSON.
+- **crawl.js** — BFS by rounds (seeds → next layer); same: attach, fetch, extract, write.
 
 **Retries:** On 404 or other non-OK response, the script retries each URL (default **3** retries, 2s apart). If it still fails, the URL is appended to **`--failed-file`** and **not** added to visited, so after you log in you can re-run and those URLs will be tried again.
 
 **Timing:** Use **`--wait-after-load 3000`** and **`--delay-between-pages 0`** when using **`--confirm-each-page`**. With **`--confirm-each-page`** the script prompts **"Proceed to next page? (y/n)"** after each page. Always use **`--visited-file .cursor/research-visited.txt`** and **`--failed-file .cursor/research-failed.txt`**.
 
-**Commands (from workspace root):** `mkdir -p .cursor`. With Chrome already open (see Open Chrome above), use **`--connect-chrome`**.
+**Commands (from workspace root):** `mkdir -p .cursor`. Run with **`--connect-chrome`** (Chrome must already be open via **@browser-open**).
 
 Seeds only (with confirm, visited, failed file, retries):
 ```bash
@@ -71,10 +57,10 @@ After the script runs, ensure the context file has **`lastFetched`** (ISO 8601).
 
 ## On invoke
 
-1. Parse seed URLs; decide append vs overwrite (**`--append`** to merge into existing context).
-2. Ensure **`--visited-file .cursor/research-visited.txt`** and **`--failed-file .cursor/research-failed.txt`** are used.
-3. If the user has Chrome open with the profile, use **`--connect-chrome`**; otherwise the script can launch Chrome.
-4. Run **fetch.js** (flat URL list) or **crawl.js** (BFS) as above. Use **`--confirm-each-page`** and **`--wait-after-load 3000`** when the user wants to confirm each page.
+1. Ensure Chrome is open with the shared profile (if not, direct the user to **@browser-open**).
+2. Parse seed URLs; decide append vs overwrite (**`--append`** to merge into existing context).
+3. Ensure **`--visited-file .cursor/research-visited.txt`** and **`--failed-file .cursor/research-failed.txt`** are used.
+4. Run **fetch.js** (flat URL list) or **crawl.js** (BFS) with **`--connect-chrome`** as above. Use **`--confirm-each-page`** and **`--wait-after-load 3000`** when the user wants to confirm each page.
 5. Add `lastFetched` to the context file if the script did not; summarize. If any URLs were written to `.cursor/research-failed.txt`, list them and suggest logging in and re-running. Suggest **@context-show** to confirm.
 
 ---
