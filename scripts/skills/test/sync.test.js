@@ -14,8 +14,8 @@ describe('skill-sync processContent', () => {
   test('replaces {{base:path}} with absolute path', () => {
     const repo = tmpdir() + '/sync-repo';
     mkdirSync(repo, { recursive: true });
-    const out = processContent('Run {{base:scripts/url}}/crawl.js', repo);
-    assert.ok(out.includes('crawl.js'));
+    const out = processContent('Run {{base:scripts/url}}/fetch.js', repo);
+    assert.ok(out.includes('fetch.js'));
     assert.ok(out.includes('scripts'));
     assert.ok(out.includes('url'));
     assert.ok(!out.includes('{{base:'));

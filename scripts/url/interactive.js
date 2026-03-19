@@ -12,7 +12,7 @@
  *   --iterations <n>  Max depth (0 = start page only; 1 = start + one level) (default: 1)
  *   --connect-chrome [url]  Use existing Chrome at CDP (default localhost:9222)
  *   --timeout <ms>    Per-page timeout (default: 30000)
- *   --out <path>      Write visited pages as JSON when done (same format as fetch/crawl)
+ *   --out <path>      Write visited pages as JSON when done (same format as fetch)
  *   --compact         With --out: single-line JSON
  *   --visited-file <path>  Load/save visited URLs (one per line); skip already-visited links
  *

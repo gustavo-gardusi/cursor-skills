@@ -22,7 +22,6 @@ const result = spawnSync(
     'url/test/visited.test.js',
     'url/test/link-filter.test.js',
     'url/test/fetch.test.js',
-    'url/test/crawl.test.js',
     'url/test/interactive.test.js',
     'context/test/context.test.js',
   ],

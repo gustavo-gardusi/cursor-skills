@@ -11,7 +11,6 @@ import { fileURLToPath } from 'url';
 import { clearContext } from '../clear.js';
 import { readContextSummary } from '../show.js';
 import { parseArgs, run as fetchRun } from '../../url/fetch.js';
-import { parseArgs as crawlParseArgs, run as crawlRun } from '../../url/crawl.js';
 import { spawnSync } from 'child_process';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -126,43 +125,6 @@ describe('context integration', () => {
     }
   });
 
-  test('context-add flow (crawl): skill-style args write to context then show sees it', async () => {
-    mkdirSync(TEST_TMP_BASE, { recursive: true });
-    const root = mkdtempSync(join(TEST_TMP_BASE, 'context-int-'));
-    const cursorDir = join(root, TEST_CONTEXT_DIR);
-    const contextPath = join(cursorDir, 'research-context.json');
-    const visitedPath = join(cursorDir, 'research-visited.txt');
-
-    try {
-      clearContext(root, { contextDir: TEST_CONTEXT_DIR });
-      const opts = crawlParseArgs([
-        '--wait-after-load', '10',
-        '--delay-between-pages', '0',
-        '--seeds', 'https://seed-a.com https://seed-b.com',
-        '--rounds', '1',
-        '--out', contextPath,
-        '--visited-file', visitedPath,
-        '--compact',
-      ]);
-      const mock = mockPage({ title: 'Crawl Page', text: 'BFS content' });
-      await crawlRun(opts, {
-        getBrowser: async () => mockBrowserWithPage(mock),
-        writeOutput: (str, path) => writeFileSync(path, str),
-      });
-      const summary = readContextSummary(root, { contextDir: TEST_CONTEXT_DIR });
-      assert.ok(summary);
-      assert.strictEqual(summary.count, 2);
-      assert.ok(summary.urls.includes('https://seed-a.com'));
-      assert.ok(summary.urls.includes('https://seed-b.com'));
-      const raw = JSON.parse(readFileSync(contextPath, 'utf8'));
-      assert.ok(Array.isArray(raw.results));
-      assert.strictEqual(raw.results.length, 2);
-      assert.strictEqual(raw.results[0].ok, true);
-    } finally {
-      rmSync(root, { recursive: true });
-    }
-  });
-
   test('clear → append → append → show: two pages, then clear → show empty', async () => {
     mkdirSync(TEST_TMP_BASE, { recursive: true });
     const root = mkdtempSync(join(TEST_TMP_BASE, 'context-int-'));
@@ -215,37 +177,6 @@ describe('context integration', () => {
     try {
       const summary = readContextSummary(root);
       assert.strictEqual(summary, null);
-    } finally {
-      rmSync(root, { recursive: true });
-    }
-  });
-
-  test('clear → crawl (seeds) → show: multiple pages from BFS run', async () => {
-    mkdirSync(TEST_TMP_BASE, { recursive: true });
-    const root = mkdtempSync(join(TEST_TMP_BASE, 'context-int-'));
-    const contextPath = join(root, TEST_CONTEXT_DIR, 'research-context.json');
-    const visitedPath = join(root, TEST_CONTEXT_DIR, 'research-visited.txt');
-
-    try {
-      clearContext(root, { contextDir: TEST_CONTEXT_DIR });
-      const opts = crawlParseArgs([
-        '--seeds', 'https://seed1.com https://seed2.com',
-        '--rounds', '1',
-        '--out', contextPath,
-        '--visited-file', visitedPath,
-        '--compact',
-      ]);
-      const mock = mockPage({ title: 'Crawl Page', text: 'Content' });
-      await crawlRun(opts, {
-        getBrowser: async () => mockBrowserWithPage(mock),
-        writeOutput: (str, path) => writeFileSync(path, str),
-      });
-
-      const summary = readContextSummary(root, { contextDir: TEST_CONTEXT_DIR });
-      assert.ok(summary);
-      assert.strictEqual(summary.count, 2);
-      assert.ok(summary.urls.includes('https://seed1.com'));
-      assert.ok(summary.urls.includes('https://seed2.com'));
     } finally {
       rmSync(root, { recursive: true });
     }

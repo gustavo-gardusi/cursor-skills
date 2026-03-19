@@ -1,5 +1,5 @@
 /**
- * Link filtering for fetch/crawl: drop noise, images, and out-of-scope URLs
+ * Link filtering for fetch: drop noise, images, and out-of-scope URLs
  * so "best" links are content pages only (LLM- and research-friendly).
  */
 

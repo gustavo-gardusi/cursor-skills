@@ -26,11 +26,11 @@ description: >-
    ```bash
    mkdir -p "$HOME/.chrome-debug-profile"
    ```
-2. Start Chrome with that profile and remote debugging; **leave it open** (do not close after running fetch/crawl):
+2. Start Chrome with that profile and remote debugging; **leave it open** (do not close after running fetch):
    ```bash
    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --remote-debugging-port=9222 --user-data-dir="$HOME/.chrome-debug-profile"
    ```
    On Linux/Windows use the same flags with your Chrome (or Chromium) executable path.
-3. Log in to any sites you need in this window. Then run **@context-add** (or fetch/crawl directly) with **`--connect-chrome`**; the script attaches to this instance and does not close it.
+3. Log in to any sites you need in this window. Then run **@context-add** (or fetch directly) with **`--connect-chrome`**; the script attaches to this instance and does not close it.
 
 To stop Chrome when done, use **@browser-close**.

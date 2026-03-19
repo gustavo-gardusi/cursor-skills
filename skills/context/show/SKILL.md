@@ -9,7 +9,7 @@ description: >-
 
 **Goal:** Read **`.cursor/research-context.json`** (written only by **context-add**) and show a short summary: number of pages, `lastFetched` if present, and the list of URLs. Does not modify the context file or the repo.
 
-**When to use:** After adding context (e.g. **context-add** or running fetch/crawl with `--out .cursor/research-context.json`) to confirm what is stored; or when the user asks "what's in the context?" or "show context summary".
+**When to use:** After adding context (e.g. **context-add** or running fetch with `--out .cursor/research-context.json`) to confirm what is stored; or when the user asks "what's in the context?" or "show context summary".
 
 ---
 

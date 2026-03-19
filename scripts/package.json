@@ -3,17 +3,16 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Scripts for cursor-skills: skill sync, url (fetch/crawl).",
+  "description": "Scripts for cursor-skills: skill sync, url (fetch with retry).",
   "scripts": {
-    "test": "node --test skills/test/sync.test.js skills/test/skills-validate.test.js url/test/visited.test.js url/test/link-filter.test.js url/test/fetch.test.js url/test/crawl.test.js url/test/interactive.test.js context/test/context.test.js",
+    "test": "node --test skills/test/sync.test.js skills/test/skills-validate.test.js url/test/visited.test.js url/test/link-filter.test.js url/test/fetch.test.js url/test/interactive.test.js context/test/context.test.js",
     "test:skills": "node --test skills/test/sync.test.js skills/test/skills-validate.test.js",
-    "test:url": "node --test url/test/visited.test.js url/test/link-filter.test.js url/test/fetch.test.js url/test/crawl.test.js url/test/interactive.test.js",
+    "test:url": "node --test url/test/visited.test.js url/test/link-filter.test.js url/test/fetch.test.js url/test/interactive.test.js",
     "test:context": "node --test context/test/context.test.js",
-    "test:coverage": "node --experimental-test-coverage --test skills/test/sync.test.js skills/test/skills-validate.test.js url/test/visited.test.js url/test/link-filter.test.js url/test/fetch.test.js url/test/crawl.test.js url/test/interactive.test.js context/test/context.test.js",
+    "test:coverage": "node --experimental-test-coverage --test skills/test/sync.test.js skills/test/skills-validate.test.js url/test/visited.test.js url/test/link-filter.test.js url/test/fetch.test.js url/test/interactive.test.js context/test/context.test.js",
     "test:coverage:check": "node check-coverage.js 90",
     "sync": "node skills/sync.js",
     "fetch": "node url/fetch.js",
-    "crawl": "node url/crawl.js",
     "fetch-interactive": "node url/interactive.js"
   },
   "dependencies": {
