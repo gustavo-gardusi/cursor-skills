@@ -10,6 +10,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { clearContext } from '../clear.js';
 import { readContextSummary } from '../show.js';
+import { writeReadableContext } from '../write-readable.js';
 import { parseArgs, run as fetchRun } from '../../url/fetch.js';
 import { spawnSync } from 'child_process';
 
@@ -54,6 +55,22 @@ describe('context integration', () => {
       assert.deepStrictEqual(context.results, []);
       assert.strictEqual(context.lastFetched, null);
       assert.strictEqual(readFileSync(visitedPath, 'utf8'), '');
+      const contextTxtPath = join(root, TEST_CONTEXT_DIR, 'research-context.txt');
+      assert.ok(!existsSync(contextTxtPath), 'clear should not create .txt');
+    } finally {
+      rmSync(root, { recursive: true });
+    }
+  });
+
+  test('clear removes research-context.txt when present', () => {
+    mkdirSync(TEST_TMP_BASE, { recursive: true });
+    const root = mkdtempSync(join(TEST_TMP_BASE, 'context-int-'));
+    const cursorDir = join(root, TEST_CONTEXT_DIR);
+    try {
+      mkdirSync(cursorDir, { recursive: true });
+      writeFileSync(join(cursorDir, 'research-context.txt'), 'dummy', 'utf8');
+      clearContext(root, { contextDir: TEST_CONTEXT_DIR });
+      assert.ok(!existsSync(join(cursorDir, 'research-context.txt')));
     } finally {
       rmSync(root, { recursive: true });
     }
@@ -84,6 +101,45 @@ describe('context integration', () => {
       assert.ok(summary);
       assert.strictEqual(summary.count, 1);
       assert.strictEqual(summary.urls[0], 'https://example.com/doc');
+    } finally {
+      rmSync(root, { recursive: true });
+    }
+  });
+
+  test('write-readable: generates .txt from context JSON with spacing and links', () => {
+    mkdirSync(TEST_TMP_BASE, { recursive: true });
+    const root = mkdtempSync(join(TEST_TMP_BASE, 'context-int-'));
+    const cursorDir = join(root, TEST_CONTEXT_DIR);
+    const contextPath = join(cursorDir, 'research-context.json');
+    try {
+      mkdirSync(cursorDir, { recursive: true });
+      writeFileSync(
+        contextPath,
+        JSON.stringify({
+          lastFetched: '2026-03-19T12:00:00.000Z',
+          results: [
+            {
+              url: 'https://example.com/doc',
+              title: 'Doc Page',
+              text: 'Hello world',
+              ok: true,
+              links: { best: ['https://example.com/next'] },
+            },
+          ],
+        }),
+        'utf8'
+      );
+      const out = writeReadableContext(root, { contextDir: TEST_CONTEXT_DIR });
+      assert.ok(out?.wrote);
+      const txtPath = join(cursorDir, 'research-context.txt');
+      assert.ok(existsSync(txtPath));
+      const txt = readFileSync(txtPath, 'utf8');
+      assert.ok(txt.includes('https://example.com/doc'));
+      assert.ok(txt.includes('TITLE:'));
+      assert.ok(txt.includes('TEXT:'));
+      assert.ok(txt.includes('Hello world'));
+      assert.ok(txt.includes('LINKS:'));
+      assert.ok(txt.includes('example.com/next'));
     } finally {
       rmSync(root, { recursive: true });
     }

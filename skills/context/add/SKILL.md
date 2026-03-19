@@ -1,20 +1,28 @@
 ---
 name: context-add
 description: >-
-  Fetch pages from URLs using fetch.js with an already-open Chrome; retry on
-  failure; store results and a list of found links per page in
-  .cursor/research-context.json. Per-site rules for GitHub, Jira, Slack (browser
-  URL). For VTEX search team: PRs, Jira tasks, Slack threads. Only this skill
-  may change the context file. Does not modify the repo.
+  Fetch pages from URLs (read-only; no interaction). Store results in
+  .cursor/research-context.json and a readable .cursor/research-context.txt.
+  Validate each result against expected content per URL type; prompt user to
+  adjust page and retry or skip until success. Only this skill may change the
+  context files. Does not modify the repo.
 ---
 
 # Context: add
 
-**Goal:** Fetch from a **flat list of URLs** using **fetch.js** with **Chrome already open**. The script opens each URL, retries on failure (default 3 retries), and stores title, text, and a **list of found links** per page in **`.cursor/research-context.json`**. Always use **`--links --links-limit 15`** so each result includes **`links.best`**. Use **`.cursor/research-visited.txt`** to skip already-visited URLs. Failed URLs (after retries) go to **`.cursor/research-failed.txt`** so the user can log in and re-run. Only this skill may change the context file. Does not modify the repo.
+**Goal:** Fetch from a **flat list of URLs** using **fetch.js** with **Chrome already open**. The script **only loads each URL and extracts content** (title, text, links). It does **not** click, type, or interact with the page. Store results in **`.cursor/research-context.json`** (for reuse between skills) and **`.cursor/research-context.txt`** (readable, with spacing between pages for review). Always use **`--links --links-limit 15`** so each result includes **`links.best`**. After fetch, **evaluate** each result against expected content for that URL type; if something is missing, **prompt the user** to adjust the page (e.g. open the right view, wait for load) and **retry** until the response matches expectations or the user says **skip**. Only this skill may change the context files. Does not modify the repo.
 
 **Prerequisite:** Chrome must be running with the shared profile and remote debugging. If not, run **@browser-open** first.
 
-**Output:** `.cursor/research-context.json` with `{ results: [ { url, title, text, ok?, links?: { best } } ], lastFetched }`. Each result includes **`links.best`** (list of found links on that page). Optionally `.cursor/research-visited.txt` and `.cursor/research-failed.txt`.
+**Output:**
+- **`.cursor/research-context.json`** — Canonical store: `{ results: [ { url, title, text, ok?, links?: { best } } ], lastFetched }`. Other skills (context-plan, context-show) read this.
+- **`.cursor/research-context.txt`** — Human-readable: one block per page with URL, title, text, and LINKS, separated by spacing for easier review. Generate after each fetch with `node {{base:scripts/context}}/write-readable.js` (or equivalent from repo path).
+
+---
+
+## Read-only restriction
+
+**fetch.js only loads pages.** It navigates to each URL, waits for load, then extracts title, body text, and links. It does **not** click buttons, fill forms, or trigger navigation. Use this for **getting** page content only. If a site requires interaction to show content (e.g. “Open in browser”), the **user** does that in Chrome; then you run fetch on the resulting URL.
 
 ---
 
@@ -28,46 +36,52 @@ fetch.js attaches to the existing Chrome via **`--connect-chrome`** (default loc
 
 Script path: **`{{base:scripts/url}}`** (replaced at install with the actual repo path).
 
-- **fetch.js** — Flat list of URLs: pass as many as needed (`URL1 URL2 URL3 ...`). Attaches to Chrome, fetches each page in sequence, extracts title, text, and **links**. **Retries** each URL on non-OK response (default 3 retries, 2s apart). **Always** use **`--links --links-limit 15`** so each result includes **`links.best`**.
+- **fetch.js** — Flat list of URLs. Attaches to Chrome, **loads** each page (no interaction), extracts title, text, and **links**. **Retries** each URL on non-OK response (default 3 retries, 2s apart). **Always** use **`--links --links-limit 15`** so each result includes **`links.best`**.
 
 **Always use:** **`--visited-file .cursor/research-visited.txt`**, **`--failed-file .cursor/research-failed.txt`**, and **`--links --links-limit 15`**.
 
 ---
 
-## Common usages (VTEX search team)
+## Expected content per URL type
 
-Typical workflow for a software engineer on the **search team** using **GitHub**, **Jira**, and **Slack**:
+Use these labels to **evaluate** whether a fetched result contains what we expect. If the result’s **text** (and optionally title) does not contain enough of these, consider the page incomplete and prompt the user to adjust and retry.
 
-| What to add | URL / source | Notes |
-|-------------|--------------|--------|
-| **PR (review, description)** | `https://github.com/vtex/intelligent-search-indexer/pull/NUMBER` | PR body, conversation, files changed. Use as-is. |
-| **GitHub Actions run** | `https://github.com/vtex/.../actions/runs/RUN_ID` or `.../job/JOB_ID` | Run summary, job list. Use as-is. |
-| **Jira task** | `https://vtex-dev.atlassian.net/browse/TIS-XXX` | Description, acceptance criteria, comments. Use browser URL (atlassian.net). |
-| **Slack channel / thread** | Web URL from browser address bar | **Must** be the **browser** URL (e.g. `app.slack.com/...` or `workspace.slack.com/archives/...`). Do **not** use `slack://` or app-only links; Chrome cannot fetch them. If the user has only an app link, ask them to open Slack in the browser and copy the URL. |
+| URL type | Expected in result (at least 1–2 of these) |
+|----------|---------------------------------------------|
+| **GitHub PR** | "Conversation", "Description", "pull", "merge", "commits", "Files changed", "review" |
+| **GitHub Actions run** | "Run", "job", "Summary", "succeeded", "failed", "workflow" |
+| **Jira task** | "Key details", "Description", "Assignee", "browse", "TIS-", "Acceptance" |
+| **Slack channel** | "Messages", "View thread", message bodies, user/display names, "Slack" in title |
 
-Pass multiple URLs in one command: e.g. PR URL + Jira URL + Actions run URL. Results and **`links.best`** are stored per page; the user can add more URLs in a follow-up run from **`links.best`** if needed.
+If the page is a **Slack** URL and the result has empty or very short text, or "Execution context was destroyed", the page may have navigated or not finished loading. Use a **longer wait** (e.g. **`--wait-after-load 5000`**) and ask the user to **open the channel/thread in the browser first**, wait until messages are visible, then say "ready" so you run fetch.
 
 ---
 
-## What to add (per URL type)
+## Validation and retry loop (in the skill)
 
-### GitHub
+After each fetch run:
 
-- **Repo / README / code** — URL as-is. Content: README, file list, code. **`links.best`** includes PRs, Issues, Actions.
-- **Pull request** — PR page URL. Content: description, conversation, files changed. **`links.best`**: commits, checks, linked issues.
-- **GitHub Actions run** — Run or job URL. Content: run summary, job list, logs (if visible). **`links.best`**: workflow file, other runs, PR.
+1. **For each result** in `results`, infer the URL type (GitHub PR, Actions, Jira, Slack, other) from the URL.
+2. **Check** that the result’s `text` (and title if useful) contains at least one or two of the **expected content** labels for that type (see table above). If the result has `ok: false` or `error`, treat it as failed.
+3. **If a result does not match** (e.g. Slack page with no messages, or PR with no "Conversation"):
+   - Tell the user: *"The page at [URL] didn’t contain the expected content for a [type] page (e.g. missing: [labels]). Please open the correct view in the browser (e.g. for Slack, open the thread and wait for messages to load; for a PR, ensure the Conversation tab is visible), then reply **retry** when ready, or **skip** to skip this URL."*
+   - **Wait for the user** to reply **retry** or **skip**.
+   - If **retry**: run fetch again for that URL only (or for all failed URLs), with a **longer `--wait-after-load`** for Slack (e.g. 5000 ms). Re-evaluate. Repeat until the result passes or the user says **skip**.
+   - If **skip**: leave that result as-is and continue.
+4. After all results pass or are skipped, **write the readable .txt** (run write-readable.js or generate `.cursor/research-context.txt` from the JSON with spacing between blocks). Summarize and list **links.best** per page.
 
-### Jira
+**Slack-specific:** For Slack URLs, before the first fetch you can say: *"For Slack, please open the channel or thread in your browser and wait until the messages are visible. If you see an 'Open in browser' link, use it. When the page is ready, tell me and I’ll fetch."* When the user confirms, run fetch with **`--wait-after-load 5000`** so the SPA has time to render.
 
-- **Task / issue** — **Browser** URL: `https://YOUR-DOMAIN.atlassian.net/browse/TICKET-123`. Content: title, description, acceptance criteria, comments, subtasks. Same URL in Chrome loads the web view.
+---
 
-### Slack
+## Common usages (VTEX search team)
 
-- **Channel or thread** — **Browser (web) URL only.** `slack://` or app links cannot be fetched. Use `https://app.slack.com/client/...` or `https://your-workspace.slack.com/archives/...`. If the user only has an app link or channel name, tell them to open Slack in the browser, then copy the URL from the address bar.
-
-### Other sites
-
-- Add URL as-is. Use **`--links --links-limit 15`**. If login required, failed URLs go to **`.cursor/research-failed.txt`**; after logging in in Chrome, re-run to retry.
+| What to add | URL | Notes |
+|-------------|-----|------|
+| **PR** | `https://github.com/vtex/intelligent-search-indexer/pull/NUMBER` | Expect: description, Conversation, files changed. |
+| **GitHub Actions run** | `https://github.com/vtex/.../actions/runs/RUN_ID` or `/job/JOB_ID` | Expect: run summary, job list. |
+| **Jira task** | `https://vtex-dev.atlassian.net/browse/TIS-XXX` | Expect: Key details, Description. |
+| **Slack channel/thread** | Browser URL from address bar | User opens in browser first; use `--wait-after-load 5000`; expect messages or "View thread". |
 
 ---
 
@@ -75,32 +89,37 @@ Pass multiple URLs in one command: e.g. PR URL + Jira URL + Actions run URL. Res
 
 `mkdir -p .cursor`. Run with **`--connect-chrome`** (Chrome must already be open via **@browser-open**).
 
-**Multiple URLs (with links and retry):**
+**Fetch (multiple URLs, with links; read-only):**
 ```bash
 node {{base:scripts/url}}/fetch.js --connect-chrome --links --links-limit 15 --wait-after-load 3000 --delay-between-pages 1000 --out .cursor/research-context.json --visited-file .cursor/research-visited.txt --failed-file .cursor/research-failed.txt --retries 3 --compact [--append] URL1 URL2
 ```
 
-With **`--confirm-each-page`** (prompt after each page):
+**For Slack URLs** use a longer wait:
 ```bash
-node {{base:scripts/url}}/fetch.js --connect-chrome --links --links-limit 15 --wait-after-load 3000 --delay-between-pages 0 --confirm-each-page --out .cursor/research-context.json --visited-file .cursor/research-visited.txt --failed-file .cursor/research-failed.txt --retries 3 --compact [--append] URL1 URL2
+node {{base:scripts/url}}/fetch.js --connect-chrome --links --links-limit 15 --wait-after-load 5000 --delay-between-pages 1000 --out .cursor/research-context.json --visited-file .cursor/research-visited.txt --failed-file .cursor/research-failed.txt --retries 3 --compact [--append] SLACK_URL
 ```
 
-After the script runs, ensure the context file has **`lastFetched`** (ISO 8601). If **`.cursor/research-failed.txt`** has URLs, list them and suggest the user log in and re-run. Summarize what was fetched and **list the found links** (from **`results[].links.best`**). **context-show** can show the summary; **context-plan** reads the context next.
+**After fetch, write readable .txt:**
+```bash
+node {{base:scripts/context}}/write-readable.js
+```
+(Or from repo: `node scripts/context/write-readable.js` with CURSOR_ROOT set to workspace root.)
 
 ---
 
 ## On invoke
 
 1. Ensure Chrome is open with the shared profile (if not, direct the user to **@browser-open**).
-2. **Normalize URLs by type:** GitHub (repo, PR, Actions) — use as-is. Jira — browser URL (atlassian.net). Slack — **browser URL only** (app.slack.com or workspace.slack.com); do not use `slack://` or app-only links.
-3. Parse seed URLs (one or many). Use **`--append`** to merge into existing context.
-4. Run **fetch.js** with **`--connect-chrome`**, **`--links --links-limit 15`**, **`--visited-file .cursor/research-visited.txt`**, **`--failed-file .cursor/research-failed.txt`**, **`--retries 3`**. Use **`--confirm-each-page`** and **`--wait-after-load 3000`** when the user wants to confirm each page.
-5. Summarize what was fetched and the **found links** per page (**`links.best`**). If any URLs are in `.cursor/research-failed.txt`, list them and suggest logging in and re-running. Suggest **@context-show** to confirm.
+2. **Normalize URLs:** GitHub (repo, PR, Actions) — use as-is. Jira — browser URL (atlassian.net). Slack — **browser URL only**; if the user has an app link, ask them to open Slack in the browser and copy the URL. For Slack, tell the user to open the channel/thread and wait for messages to load, then say when ready.
+3. Run **fetch.js** with **`--connect-chrome`**, **`--links --links-limit 15`**, **`--visited-file .cursor/research-visited.txt`**, **`--failed-file .cursor/research-failed.txt`**, **`--retries 3`**. Use **`--wait-after-load 5000`** for Slack URLs.
+4. **Validate** each result against the expected content for its URL type. For any result that does not match, **prompt the user**: adjust the page (e.g. open thread, wait for load), then reply **retry** or **skip**. If **retry**, run fetch again for the failed URL(s) (use longer wait for Slack) and re-validate. Repeat until all pass or user skips.
+5. Run **write-readable.js** to generate **`.cursor/research-context.txt`** with spacing between pages. Summarize what was stored and list **links.best** per page. If any URLs are in `.cursor/research-failed.txt`, list them and suggest logging in and re-running. Suggest **@context-show** to confirm.
 
 ---
 
 ## Verification
 
-- [ ] Context file has `lastFetched` and `results`; each result has **`links.best`** when the page had links; no repo files changed.
-- [ ] Failed URLs (if any) are in `.cursor/research-failed.txt`; user can log in and re-run.
+- [ ] Context: **.cursor/research-context.json** and **.cursor/research-context.txt** present; each result has **links.best** when the page had links; no repo files changed.
+- [ ] Fetch was **read-only** (no interaction with pages).
+- [ ] Results were validated; user was prompted to retry or skip when content didn’t match.
 - [ ] Next: **context-show** for summary; **context-plan** reads context (read-only) and writes `.cursor/research-plan.md`.

@@ -2,6 +2,7 @@
 /**
  * Link fetcher: open a list of URLs (in current Chrome or launched browser),
  * wait for each page to load, collect data, output JSON.
+ * Read-only: only loads pages and extracts title, text, and links; does not click or interact.
  *
  * Usage:
  *   node fetch.js [options] [urls...]

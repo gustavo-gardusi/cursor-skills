@@ -9,7 +9,7 @@ scripts/url/node_modules/
 scripts/skills/node_modules/
 # Cursor / url-script temp output dirs
 scripts/lf-fetch-*/
-# Cursor ephemeral context (research-context.json, etc.); not part of repo, safe to delete
+# Cursor ephemeral context (research-context.json, research-context.txt, etc.); not part of repo, safe to delete
 .cursor/
 # Context integration test temp dirs
 scripts/context/.tmp/

@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
  * Clear research context and visited set so the next context-add starts fresh.
- * Removes or truncates .cursor/research-context.json and .cursor/research-visited.txt.
+ * Removes or truncates .cursor/research-context.json, .cursor/research-context.txt (if present), and .cursor/research-visited.txt.
  *
  * Usage: node clear.js
  * Env:   CURSOR_ROOT — directory containing .cursor/ (default: process.cwd())
  */
 
-import { mkdirSync, writeFileSync } from 'fs';
+import { mkdirSync, writeFileSync, unlinkSync, existsSync } from 'fs';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -28,10 +28,12 @@ export function clearContext(root = CURSOR_ROOT, opts = {}) {
   const contextDir = opts.contextDir ?? '.cursor';
   const dir = join(root, contextDir);
   const contextPath = join(dir, 'research-context.json');
+  const contextTxtPath = join(dir, 'research-context.txt');
   const visitedPath = join(dir, 'research-visited.txt');
   mkdirSync(dir, { recursive: true });
   writeFileSync(contextPath, JSON.stringify(EMPTY_CONTEXT), 'utf8');
   writeFileSync(visitedPath, '', 'utf8');
+  if (existsSync(contextTxtPath)) unlinkSync(contextTxtPath);
   return { cleared: true, contextPath, visitedPath };
 }
 
