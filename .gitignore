@@ -5,11 +5,11 @@
 .vscode/
 node_modules/
 scripts/node_modules/
-scripts/link-fetcher/node_modules/
+scripts/url/node_modules/
 scripts/skills/node_modules/
-# Cursor / link-fetcher temp output dirs (e.g. lf-fetch-<random>)
+# Cursor / url-script temp output dirs
 scripts/lf-fetch-*/
 # Cursor ephemeral context (research-context.json, etc.); not part of repo, safe to delete
 .cursor/
-# Local env (copy from .env.example and set CURSOR_SKILLS_REPO)
-.env
+# Context integration test temp dirs
+scripts/context/.tmp/

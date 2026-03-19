@@ -1,0 +1,30 @@
+---
+name: context-show
+description: >-
+  Show a short summary of the current research context (read-only): count of
+  pages, lastFetched, and URLs. Use after context-add to confirm what was stored.
+---
+
+# Context: show (read-only summary)
+
+**Goal:** Read **`.cursor/research-context.json`** (written only by **context-add**) and show a short summary: number of pages, `lastFetched` if present, and the list of URLs. Does not modify the context file or the repo.
+
+**When to use:** After adding context (e.g. **context-add** or running fetch/crawl with `--out .cursor/research-context.json`) to confirm what is stored; or when the user asks "what's in the context?" or "show context summary".
+
+---
+
+## On invoke
+
+1. Read **`.cursor/research-context.json`** if it exists (from workspace root or `CURSOR_ROOT`).
+2. If missing or invalid JSON: report "No context file" or "Invalid context file".
+3. Otherwise summarize in chat:
+   - **Count** of entries in `results`.
+   - **lastFetched** (ISO timestamp) if present.
+   - **URLs** (e.g. first 20, then "... and N more" if longer).
+4. Optionally run **`node scripts/context/show.js`** from repo root (or with `CURSOR_ROOT` set) to print the same summary to the terminal.
+
+---
+
+## Verification
+
+- [ ] Summary is read-only; no changes to `.cursor/research-context.json` or the repo.

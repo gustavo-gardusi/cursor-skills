@@ -30,6 +30,15 @@ describe('link-filter isNoiseUrl', () => {
     assert.strictEqual(isNoiseUrl('https://example.com/media/clip.mp4'), true);
   });
 
+  test('filters ad and tracking URLs', () => {
+    assert.strictEqual(isNoiseUrl('https://doubleclick.net/track'), true);
+    assert.strictEqual(isNoiseUrl('https://pagead2.googlesyndication.com/pagead/img'), true);
+    assert.strictEqual(isNoiseUrl('https://googleadservices.com/page/conversion'), true);
+    assert.strictEqual(isNoiseUrl('https://example.com/ads/banner'), true);
+    assert.strictEqual(isNoiseUrl('https://adserver.example.com/click'), true);
+    assert.strictEqual(isNoiseUrl('https://example.com/ad/123'), true);
+  });
+
   test('allows content pages', () => {
     assert.strictEqual(isNoiseUrl('https://example.com/'), false);
     assert.strictEqual(isNoiseUrl('https://example.com/about'), false);
@@ -42,5 +51,11 @@ describe('link-filter isNoiseUrl', () => {
     assert.strictEqual(isNoiseUrl('javascript:void(0)'), true);
     assert.strictEqual(isNoiseUrl('mailto:hi@example.com'), true);
     assert.strictEqual(isNoiseUrl('data:image/png;base64,abc'), true);
+  });
+
+  test('returns true for invalid or malformed URL (catch)', () => {
+    assert.strictEqual(isNoiseUrl(''), true);
+    assert.strictEqual(isNoiseUrl('not-a-url'), true);
+    assert.strictEqual(isNoiseUrl('://missing-protocol.com'), true);
   });
 });

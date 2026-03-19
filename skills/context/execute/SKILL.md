@@ -1,15 +1,15 @@
 ---
-name: execute
+name: context-execute
 description: >-
   Reads the implementation plan from .cursor/research-plan.md (or from the
   chat) and applies it to the repo: add, change, update files and run
   one-off commands. Mostly query from plan, change the current repo only.
-  Use after plan is done.
+  Use after context-plan is done.
 ---
 
-# Execute (query plan; change repo only)
+# Context: execute (query plan; change repo only)
 
-**Goal:** **Mostly query from the plan** and **change the current repo.** Read the implementation plan from **`.cursor/research-plan.md`** (or from the user's message). Apply it: add or change files, update/wire code, run one-off commands as specified in each chunk. **Only the repo (code/config) is modified**; do not change `.cursor/research-context.json` or `.cursor/research-plan.md`. Use after **plan** is done.
+**Goal:** **Mostly query from the plan** and **change the current repo.** Read the implementation plan from **`.cursor/research-plan.md`** (or from the user's message). Apply it: add or change files, update/wire code, run one-off commands as specified in each chunk. **Only the repo (code/config) is modified**; do not change `.cursor/research-context.json` or `.cursor/research-plan.md`. Use after **context-plan** is done.
 
 **Input:** Prefer **`.cursor/research-plan.md`**. If missing, use the plan the user pasted or provided in chat.
 
@@ -17,7 +17,7 @@ description: >-
 
 ## Plan file structure (what to parse)
 
-**plan** writes `.cursor/research-plan.md` with this structure:
+**context-plan** writes `.cursor/research-plan.md` with this structure:
 
 - **`## Relation to repo`** — Short paragraph (informational).
 - **`## Impact summary`** — Table: source/context → repo areas (informational).
@@ -67,5 +67,5 @@ Parse each **`### Chunk`** and apply the three bullet types in order. Respect an
 
 ## Notes
 
-- **Workflow:** **search** (only changes context file) → **plan** (only reads context + repo, writes plan file) → **execute** (only reads plan, changes repo).
+- **Workflow:** **context-add** (only changes context file) → **context-plan** (only reads context + repo, writes plan file) → **context-execute** (only reads plan, changes repo).
 - **Branch/PR:** Consider **gh-branch** or **start-task-jira** before executing; after changes, **gh-push** or **gh-pr**.

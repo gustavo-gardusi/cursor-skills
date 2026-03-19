@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Run tests with coverage and fail if line coverage is below 80%.
+ * Run tests with coverage and fail if line coverage is below threshold.
+ * Default 90%; pass a number to override (e.g. node check-coverage.js 87).
  * Usage: node check-coverage.js [min%]
  */
 
@@ -9,7 +10,7 @@ import { dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const MIN_LINE = parseInt(process.argv[2] || '80', 10);
+const MIN_LINE = parseInt(process.argv[2] || '90', 10);
 
 const result = spawnSync(
   process.execPath,
@@ -17,11 +18,13 @@ const result = spawnSync(
     '--experimental-test-coverage',
     '--test',
     'skills/test/sync.test.js',
-    'link-fetcher/test/visited.test.js',
-    'link-fetcher/test/link-filter.test.js',
-    'link-fetcher/test/fetch.test.js',
-    'link-fetcher/test/crawl.test.js',
-    'link-fetcher/test/interactive.test.js',
+    'skills/test/skills-validate.test.js',
+    'url/test/visited.test.js',
+    'url/test/link-filter.test.js',
+    'url/test/fetch.test.js',
+    'url/test/crawl.test.js',
+    'url/test/interactive.test.js',
+    'context/test/context.test.js',
   ],
   {
     cwd: __dirname,

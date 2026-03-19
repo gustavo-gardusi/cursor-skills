@@ -1,18 +1,23 @@
 #!/usr/bin/env node
 /**
- * Depth crawl: start from seed URLs, fetch each page, extract up to N links
- * per page, keep top X unique links, fetch those; repeat Y rounds.
- * Output: consolidated JSON of all fetched pages for downstream use.
+ * Depth crawl: start from seed URLs, fetch each page, extract all links that
+ * pass the filter (valid http(s), no images/assets/ads), then fetch those;
+ * repeat Y rounds. No top-X limit—downstream (e.g. cursor skill) can filter further.
+ * Output: consolidated JSON of all fetched pages.
  *
  * Usage:
- *   node crawl.js --seeds "https://a.com" --per-page 10 --top 20 --rounds 2
- *   node crawl.js --seeds-file seeds.txt --per-page 10 --top 20 --rounds 2 --connect-chrome --out crawl.json
+ *   node crawl.js --seeds "https://a.com" --rounds 2
+ *   node crawl.js --seeds-file seeds.txt --rounds 2 --connect-chrome --out crawl.json
  *
- *   --wait-after-load <ms>  After load, wait this many ms before extracting (default: 0; use 2000 for SPAs)
- *   --delay-between-pages <ms>  Wait this many ms between each page (default: 0; use 3000 to avoid hammering)
+ *   --wait-after-load <ms>  After load, wait this many ms before extracting (default: 0; use 3000 for SPAs).
+ *   --delay-between-pages <ms>  Wait between pages (default: 0). Use 0 with --confirm-each-page.
+ *   --confirm-each-page    Prompt "Proceed to next page? (y/n)" before each page; uses 3000 ms wait-after-load if not set.
  */
 
+import { createInterface } from 'readline';
 import { fileURLToPath } from 'url';
+import { join } from 'path';
+import { homedir } from 'os';
 import { chromium } from 'playwright';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { argv } from 'process';
@@ -20,13 +25,12 @@ import { loadVisitedSet, saveVisitedSet, normalizeVisitedUrl } from './visited.j
 import { isNoiseUrl } from './link-filter.js';
 
 const CDP_URL = 'http://localhost:9222';
+const CHROME_DEBUG_PROFILE = join(homedir(), '.chrome-debug-profile');
 
 export function parseArgs(args = argv.slice(2)) {
   const opts = {
     seeds: [],
     seedsFile: null,
-    perPage: 10,
-    top: 20,
     rounds: 2,
     connectChrome: false,
     cdpUrl: CDP_URL,
@@ -38,6 +42,7 @@ export function parseArgs(args = argv.slice(2)) {
     compact: false,
     append: false,
     visitedFile: null,
+    confirmEachPage: false,
   };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -47,12 +52,6 @@ export function parseArgs(args = argv.slice(2)) {
         break;
       case '--seeds-file':
         opts.seedsFile = args[++i];
-        break;
-      case '--per-page':
-        opts.perPage = parseInt(args[++i], 10) || 10;
-        break;
-      case '--top':
-        opts.top = parseInt(args[++i], 10) || 20;
         break;
       case '--rounds':
         opts.rounds = parseInt(args[++i], 10) || 2;
@@ -85,7 +84,13 @@ export function parseArgs(args = argv.slice(2)) {
       case '--delay-between-pages':
         opts.delayBetweenPages = parseInt(args[++i], 10) || 0;
         break;
+      case '--confirm-each-page':
+        opts.confirmEachPage = true;
+        break;
     }
+  }
+  if (opts.confirmEachPage && opts.waitAfterLoad === 0) {
+    opts.waitAfterLoad = 3000;
   }
   if (opts.seedsFile) {
     const lines = readFileSync(opts.seedsFile, 'utf8').split(/\r?\n/);
@@ -103,13 +108,11 @@ export function isValidUrl(s) {
   }
 }
 
-async function extractLinks(page, limit) {
-  const links = await page.$$eval('a[href]', (anchors, lim) => {
-    return anchors
-      .map((a) => a.href)
-      .filter((href) => href.startsWith('http'))
-      .slice(0, lim);
-  }, limit);
+/** Extract all links from page that pass filter (valid http(s), no images/assets/ads). */
+async function extractLinks(page) {
+  const links = await page.$$eval('a[href]', (anchors) =>
+    anchors.map((a) => a.href).filter((href) => href.startsWith('http'))
+  );
   return links.filter(isValidUrl).filter((href) => !isNoiseUrl(href));
 }
 
@@ -131,49 +134,46 @@ export async function fetchPage(page, url, opts) {
     } catch {
       result.text = null;
     }
-    result.links = await extractLinks(page, opts.perPage);
+    result.links = await extractLinks(page);
   } catch (e) {
     result.error = e.message || String(e);
   }
   return result;
 }
 
-export function pickTopX(allLinks, alreadyFetched, X, normalize = (u) => u) {
+/** Return unique links not yet in alreadyFetched (no limit; downstream can filter). */
+export function linksForNextRound(allLinks, alreadyFetched, normalize = (u) => u) {
   const seen = new Set(alreadyFetched);
-  const unique = [...new Set(allLinks)].filter((u) => !seen.has(normalize(u) || u));
-  return unique.slice(0, X);
+  return [...new Set(allLinks)].filter((u) => !seen.has(normalize(u) || u));
 }
 
 /**
- * Run crawl: optionally use an injected getPage() to avoid real browser (for tests).
+ * Run crawl: all requests use a browser (Chrome or injected getBrowser for tests).
  * @param {object} opts - Parsed options (seeds, perPage, top, rounds, etc.)
- * @param {{ getPage?: () => Promise<import('playwright').Page> }} deps - Optional: getPage() returns a page (mocked in tests).
- * @returns {{ rounds, perPage, top, totalFetched, results }} Result object; caller may write to opts.out or stdout.
+ * @param {{ getBrowser?: () => Promise<import('playwright').Browser> }} deps - Optional: getBrowser() for tests (no real Chrome).
+ * @returns {{ rounds, totalFetched, results }} Result object; caller may write to opts.out or stdout.
  */
 export async function run(opts, deps = {}) {
   if (!opts.seeds.length) {
-    const msg = 'Usage: node crawl.js --seeds "url1 url2" [--seeds-file FILE] --per-page 10 --top 20 --rounds 2';
-    if (deps.getPage) throw new Error(msg);
+    const msg = 'Usage: node crawl.js --seeds "url1 url2" [--seeds-file FILE] --rounds 2';
+    if (deps.getBrowser) throw new Error(msg);
     console.error(msg);
     process.exit(1);
   }
 
-  let page;
   let browser;
-  if (deps.getPage) {
-    page = await deps.getPage();
-  } else if (deps.getBrowser) {
+  let page;
+  if (deps.getBrowser) {
     browser = await deps.getBrowser();
     const context = browser.contexts?.()?.[0] || (await browser.newContext?.());
     page = await (context.newPage?.() ?? context);
-  } else {
-    if (opts.connectChrome) {
-      browser = await chromium.connectOverCDP(opts.cdpUrl);
-    } else {
-      browser = await chromium.launch({ channel: 'chrome', headless: false });
-    }
+  } else if (opts.connectChrome) {
+    browser = await chromium.connectOverCDP(opts.cdpUrl || CDP_URL);
     const context = browser.contexts()[0] || await browser.newContext();
     page = await context.newPage();
+  } else {
+    browser = await chromium.launchPersistentContext(CHROME_DEBUG_PROFILE, { channel: 'chrome', headless: false });
+    page = browser.pages()[0] || await browser.newPage();
   }
 
   const allResults = [];
@@ -184,8 +184,22 @@ export async function run(opts, deps = {}) {
     : new Set();
   let currentRoundUrls = [...opts.seeds];
 
+  let askProceed = deps.askProceed;
+  let confirmRl = null;
+  if (opts.confirmEachPage && !askProceed && !deps.getBrowser) {
+    confirmRl = createInterface({ input: process.stdin, output: process.stdout });
+    askProceed = () =>
+      new Promise((resolve) => {
+        confirmRl.question('Proceed to next page? (y/n) ', (answer) => {
+          resolve(/^[yY]/.test(answer?.trim()));
+        });
+      });
+  }
+  if (!askProceed) askProceed = () => Promise.resolve(true);
+
   const delayBetween = opts.delayBetweenPages || 0;
-  for (let round = 0; round < opts.rounds; round++) {
+  let stoppedByUser = false;
+  for (let round = 0; round < opts.rounds && !stoppedByUser; round++) {
     const allLinksThisRound = [];
     const urlsThisRound = [...currentRoundUrls];
     for (let i = 0; i < urlsThisRound.length; i++) {
@@ -196,12 +210,21 @@ export async function run(opts, deps = {}) {
       const data = await fetchPage(page, url, opts);
       allResults.push(data);
       allLinksThisRound.push(...(data.links || []));
-      if (delayBetween > 0 && i < urlsThisRound.length - 1) await delay(delayBetween);
+      if (opts.confirmEachPage && (i < urlsThisRound.length - 1 || round < opts.rounds - 1)) {
+        const proceed = await askProceed(url, allResults.length, 0);
+        if (!proceed) {
+          stoppedByUser = true;
+          break;
+        }
+      } else if (delayBetween > 0 && i < urlsThisRound.length - 1) {
+        await delay(delayBetween);
+      }
     }
-    if (round === opts.rounds - 1) break;
-    currentRoundUrls = pickTopX(allLinksThisRound, fetchedUrls, opts.top, (u) => normalizeVisitedUrl(u) || u);
+    if (round === opts.rounds - 1 || stoppedByUser) break;
+    currentRoundUrls = linksForNextRound(allLinksThisRound, fetchedUrls, (u) => normalizeVisitedUrl(u) || u);
     if (!currentRoundUrls.length) break;
   }
+  if (confirmRl) confirmRl.close();
 
   if (browser) await browser.close();
 
@@ -212,8 +235,6 @@ export async function run(opts, deps = {}) {
 
   let out = {
     rounds: opts.rounds,
-    perPage: opts.perPage,
-    top: opts.top,
     totalFetched: allResults.length,
     results: allResults,
   };
@@ -223,8 +244,6 @@ export async function run(opts, deps = {}) {
       const prev = existing.results || [];
       out = {
         rounds: opts.rounds,
-        perPage: opts.perPage,
-        top: opts.top,
         totalFetched: prev.length + allResults.length,
         results: [...prev, ...allResults],
       };
@@ -232,8 +251,10 @@ export async function run(opts, deps = {}) {
       /* ignore parse errors; overwrite with current run */
     }
   }
-  if (!deps.getPage && !deps.getBrowser) {
-    const str = opts.compact ? JSON.stringify(out) : JSON.stringify(out, null, 2);
+  const str = opts.compact ? JSON.stringify(out) : JSON.stringify(out, null, 2);
+  if (deps.writeOutput) {
+    deps.writeOutput(str, opts.out);
+  } else if (!deps.getBrowser) {
     if (opts.out) writeFileSync(opts.out, str);
     else console.log(str);
   }

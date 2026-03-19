@@ -1,19 +1,9 @@
 /**
- * Visited-URL set: load/save from a file (one URL per line) for link-fetcher scripts.
+ * Visited-URL set: load/save from a file (one URL per line) for url scripts.
  * Format is LLM-friendly: plain text, one URL per line, easy to grep or feed to a model.
  */
 
 import { readFileSync, writeFileSync, existsSync } from 'fs';
-
-function isValidUrl(s) {
-  if (typeof s !== 'string' || !s.trim()) return false;
-  try {
-    const u = new URL(s.trim());
-    return u.protocol === 'http:' || u.protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
 
 /** Normalize for dedupe: absolute http(s) URL without hash; null for invalid or non-http(s). */
 export function normalizeVisitedUrl(url) {

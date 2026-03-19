@@ -28,5 +28,5 @@ jobs:
       - name: Test
         run: npm test --prefix scripts
 
-      - name: Coverage check (80%)
+      - name: Coverage check (90%+)
         run: npm run test:coverage:check --prefix scripts

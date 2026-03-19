@@ -3,21 +3,29 @@ import assert from 'node:assert';
 import { mkdtempSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { parseArgs, isValidUrl, pickTopX, fetchPage, run } from '../crawl.js';
+import { spawnSync } from 'child_process';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+import { parseArgs, isValidUrl, linksForNextRound, fetchPage, run } from '../crawl.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+function mockBrowserWithPage(mockPage) {
+  return {
+    contexts: () => [{ newPage: async () => mockPage }],
+    close: async () => {},
+  };
+}
 
 describe('crawl parseArgs', () => {
-  test('parses seeds and depth options', () => {
-    const opts = parseArgs(['--seeds', 'https://a.com https://b.com', '--per-page', '5', '--top', '10', '--rounds', '2']);
+  test('parses seeds and rounds', () => {
+    const opts = parseArgs(['--seeds', 'https://a.com https://b.com', '--rounds', '2']);
     assert.strictEqual(opts.seeds.length, 2);
-    assert.strictEqual(opts.perPage, 5);
-    assert.strictEqual(opts.top, 10);
     assert.strictEqual(opts.rounds, 2);
   });
 
-  test('defaults perPage, top, rounds', () => {
+  test('defaults rounds', () => {
     const opts = parseArgs(['--seeds', 'https://x.com']);
-    assert.strictEqual(opts.perPage, 10);
-    assert.strictEqual(opts.top, 20);
     assert.strictEqual(opts.rounds, 2);
   });
 
@@ -67,6 +75,12 @@ describe('crawl parseArgs', () => {
     assert.strictEqual(opts.visitedFile, 'visited.txt');
   });
 
+  test('parses --confirm-each-page and defaults wait-after-load to 3000', () => {
+    const opts = parseArgs(['--seeds', 'https://x.com', '--confirm-each-page']);
+    assert.strictEqual(opts.confirmEachPage, true);
+    assert.strictEqual(opts.waitAfterLoad, 3000);
+  });
+
   test('parses --wait-after-load and --delay-between-pages', () => {
     const opts = parseArgs(['--seeds', 'https://x.com', '--wait-after-load', '1500', '--delay-between-pages', '2500']);
     assert.strictEqual(opts.waitAfterLoad, 1500);
@@ -87,20 +101,20 @@ describe('crawl isValidUrl', () => {
   });
 });
 
-describe('crawl pickTopX', () => {
-  test('returns first X unique not already fetched', () => {
+describe('crawl linksForNextRound', () => {
+  test('returns all unique links not already fetched (no limit)', () => {
     const all = ['https://a.com', 'https://b.com', 'https://a.com', 'https://c.com'];
     const fetched = new Set(['https://a.com']);
-    const out = pickTopX(all, fetched, 2);
+    const out = linksForNextRound(all, fetched);
     assert.strictEqual(out.length, 2);
-    assert.strictEqual(out[0], 'https://b.com');
-    assert.strictEqual(out[1], 'https://c.com');
+    assert.ok(out.includes('https://b.com'));
+    assert.ok(out.includes('https://c.com'));
   });
 
-  test('returns fewer than X when not enough new', () => {
+  test('returns empty when all already fetched', () => {
     const all = ['https://a.com', 'https://b.com'];
     const fetched = new Set(['https://a.com', 'https://b.com']);
-    const out = pickTopX(all, fetched, 5);
+    const out = linksForNextRound(all, fetched);
     assert.strictEqual(out.length, 0);
   });
 });
@@ -112,7 +126,7 @@ describe('crawl fetchPage', () => {
       title: () => Promise.resolve(''),
       $: () => Promise.resolve(null),
     };
-    const result = await fetchPage(mockPage, 'http://bad.example', { waitUntil: 'load', timeout: 1000, perPage: 5 });
+    const result = await fetchPage(mockPage, 'http://bad.example', { waitUntil: 'load', timeout: 1000 });
     assert.strictEqual(result.error, 'Crawl nav failed');
     assert.strictEqual(result.links.length, 0);
   });
@@ -124,7 +138,7 @@ describe('crawl fetchPage', () => {
       $: () => Promise.resolve({ innerText: () => Promise.resolve('Body') }),
       $$eval: (_sel, fn, lim) => Promise.resolve(fn([{ href: 'https://example.com' }, { href: 'http://other.org' }], lim)),
     };
-    const result = await fetchPage(mockPage, 'http://mock.example', { waitUntil: 'load', timeout: 5000, perPage: 10 });
+    const result = await fetchPage(mockPage, 'http://mock.example', { waitUntil: 'load', timeout: 5000 });
     assert.strictEqual(result.url, 'http://mock.example');
     assert.strictEqual(result.ok, true);
     assert.strictEqual(result.title, 'Crawl Mock');
@@ -140,7 +154,7 @@ describe('crawl fetchPage', () => {
       $: () => Promise.resolve({ innerText: () => Promise.resolve('') }),
       $$eval: () => Promise.resolve([]),
     };
-    const result = await fetchPage(mockPage, 'http://example.com', { waitUntil: 'load', timeout: 5000, perPage: 5 });
+    const result = await fetchPage(mockPage, 'http://example.com', { waitUntil: 'load', timeout: 5000 });
     assert.strictEqual(result.ok, false);
   });
 
@@ -158,7 +172,7 @@ describe('crawl fetchPage', () => {
       $: () => Promise.resolve({ innerText: () => Promise.resolve('Body') }),
       $$eval: (_sel, fn, lim) => Promise.resolve(fn(mockAnchors, lim)),
     };
-    const result = await fetchPage(mockPage, 'https://site.com/', { waitUntil: 'load', timeout: 5000, perPage: 10 });
+    const result = await fetchPage(mockPage, 'https://site.com/', { waitUntil: 'load', timeout: 5000 });
     assert.strictEqual(result.ok, true);
     assert.ok(Array.isArray(result.links));
     assert.ok(result.links.some((u) => u.includes('page-a')), 'links includes content');
@@ -167,18 +181,51 @@ describe('crawl fetchPage', () => {
     assert.ok(!result.links.some((u) => u.includes('.png') || u.includes('images/')), 'links excludes image');
     assert.ok(!result.links.some((u) => u.includes('static/')), 'links excludes static asset');
   });
+
+  test('fetchPage with waitAfterLoad waits before extracting', async () => {
+    const start = Date.now();
+    const mockPage = {
+      goto: () => Promise.resolve({ ok: () => true }),
+      title: () => Promise.resolve('Waited'),
+      $: () => Promise.resolve({ innerText: () => Promise.resolve('') }),
+      $$eval: () => Promise.resolve([]),
+    };
+    const result = await fetchPage(mockPage, 'https://w.example', {
+      waitUntil: 'load',
+      timeout: 5000,
+      waitAfterLoad: 50,
+    });
+    assert.strictEqual(result.title, 'Waited');
+    assert.ok(Date.now() - start >= 45, 'waitAfterLoad respected');
+  });
+
+  test('fetchPage sets text null when body selector throws', async () => {
+    const mockPage = {
+      goto: () => Promise.resolve({ ok: () => true }),
+      title: () => Promise.resolve('Title'),
+      $: () => Promise.reject(new Error('No body')),
+      $$eval: () => Promise.resolve([]),
+    };
+    const result = await fetchPage(mockPage, 'https://example.com', {
+      waitUntil: 'load',
+      timeout: 5000,
+    });
+    assert.strictEqual(result.ok, true);
+    assert.strictEqual(result.text, null);
+    assert.strictEqual(result.title, 'Title');
+  });
 });
 
 describe('crawl run (regression)', () => {
-  test('run with getPage mock returns rounds and results', async () => {
+  test('run with getBrowser mock returns rounds and results', async () => {
     const mockPage = {
       goto: () => Promise.resolve({ ok: () => true }),
       title: () => Promise.resolve('Crawl Page'),
       $: () => Promise.resolve({ innerText: () => Promise.resolve('Content') }),
-      $$eval: (_sel, fn, lim) => Promise.resolve(fn([{ href: 'https://next.com' }], lim)),
+      $$eval: (_sel, fn) => Promise.resolve(fn([{ href: 'https://next.com' }])),
     };
-    const opts = parseArgs(['--seeds', 'https://seed.com', '--rounds', '1', '--per-page', '5', '--top', '10']);
-    const out = await run(opts, { getPage: async () => mockPage });
+    const opts = parseArgs(['--seeds', 'https://seed.com', '--rounds', '1']);
+    const out = await run(opts, { getBrowser: async () => mockBrowserWithPage(mockPage) });
     assert.strictEqual(out.rounds, 1);
     assert.strictEqual(out.totalFetched, 1);
     assert.strictEqual(out.results.length, 1);
@@ -186,16 +233,45 @@ describe('crawl run (regression)', () => {
     assert.strictEqual(out.results[0].title, 'Crawl Page');
   });
 
-  test('run with empty seeds throws when getPage provided', async () => {
+  test('run with empty seeds throws when getBrowser provided', async () => {
     const mockPage = {};
     await assert.rejects(
       () =>
         run(
-          { seeds: [], perPage: 10, top: 20, rounds: 2, waitUntil: 'load', timeout: 5000 },
-          { getPage: async () => mockPage }
+          { seeds: [], rounds: 2, waitUntil: 'load', timeout: 5000 },
+          { getBrowser: async () => mockBrowserWithPage(mockPage) }
         ),
       /Usage:/
     );
+  });
+
+  test('run with empty seeds and no getBrowser exits 1 (spawn)', () => {
+    const script = join(__dirname, '..', 'crawl.js');
+    const result = spawnSync(process.execPath, [script], {
+      cwd: join(__dirname, '..', '..'),
+      encoding: 'utf8',
+      timeout: 5000,
+    });
+    assert.strictEqual(result.status, 1);
+    assert.ok(result.stderr && result.stderr.includes('Usage:'));
+  });
+
+  test('run with getBrowser uses contexts()[0] when present', async () => {
+    const mockPage = {
+      goto: () => Promise.resolve({ ok: () => true }),
+      title: () => Promise.resolve('Crawl context'),
+      $: () => Promise.resolve({ innerText: () => Promise.resolve('') }),
+      $$eval: (_s, fn, lim) => Promise.resolve(fn([], lim)),
+    };
+    const mockContext = { newPage: async () => mockPage };
+    const mockBrowser = {
+      contexts: () => [mockContext],
+      close: async () => {},
+    };
+    const opts = parseArgs(['--seeds', 'https://ctx.org', '--rounds', '1']);
+    const out = await run(opts, { getBrowser: async () => mockBrowser });
+    assert.strictEqual(out.totalFetched, 1);
+    assert.strictEqual(out.results[0].title, 'Crawl context');
   });
 
   test('run with getBrowser mock returns results (no real Chromium)', async () => {
@@ -224,7 +300,7 @@ describe('crawl run (regression)', () => {
       $$eval: () => Promise.resolve([]),
     };
     const opts = parseArgs(['--seeds', 'https://seed.com', '--rounds', '1', '--compact']);
-    const out = await run(opts, { getPage: async () => mockPage });
+    const out = await run(opts, { getBrowser: async () => mockBrowserWithPage(mockPage) });
     const oneLine = JSON.stringify(out);
     assert.ok(!oneLine.includes('\n'));
     const parsed = JSON.parse(oneLine);
@@ -235,8 +311,6 @@ describe('crawl run (regression)', () => {
   test('run with --out and --append merges into existing file', async () => {
     const existing = {
       rounds: 1,
-      perPage: 10,
-      top: 20,
       totalFetched: 1,
       results: [{ url: 'https://first.com', title: 'First', text: 'x', ok: true, links: [] }],
     };
@@ -248,7 +322,7 @@ describe('crawl run (regression)', () => {
     };
     const opts = parseArgs(['--seeds', 'https://second.com', '--rounds', '1', '--out', '/any/crawl.json', '--append']);
     const out = await run(opts, {
-      getPage: async () => mockPage,
+      getBrowser: async () => mockBrowserWithPage(mockPage),
       existsSync: () => true,
       readFileSync: () => JSON.stringify(existing),
     });
@@ -266,12 +340,29 @@ describe('crawl run (regression)', () => {
       $$eval: () => Promise.resolve([]),
     };
     const opts = parseArgs(['--seeds', 'https://only.com', '--rounds', '1', '--out', '/nonexistent.json', '--append']);
-    const out = await run(opts, { getPage: async () => mockPage, existsSync: () => false });
+    const out = await run(opts, { getBrowser: async () => mockBrowserWithPage(mockPage), existsSync: () => false });
     assert.strictEqual(out.totalFetched, 1);
     assert.strictEqual(out.results[0].url, 'https://only.com');
   });
 
-  test('run with two rounds fetches seeds then next links up to top', async () => {
+  test('run with --append and corrupt existing JSON overwrites with current run', async () => {
+    const mockPage = {
+      goto: () => Promise.resolve({ ok: () => true }),
+      title: () => Promise.resolve('Only'),
+      $: () => Promise.resolve({ innerText: () => Promise.resolve('') }),
+      $$eval: () => Promise.resolve([]),
+    };
+    const opts = parseArgs(['--seeds', 'https://only.com', '--rounds', '1', '--out', '/any.json', '--append']);
+    const out = await run(opts, {
+      getBrowser: async () => mockBrowserWithPage(mockPage),
+      existsSync: () => true,
+      readFileSync: () => 'not valid json {{{',
+    });
+    assert.strictEqual(out.totalFetched, 1);
+    assert.strictEqual(out.results[0].url, 'https://only.com');
+  });
+
+  test('run with two rounds fetches seeds then all next-round links', async () => {
     const urlsSeen = [];
     const mockPage = {
       goto: (url) => {
@@ -291,8 +382,8 @@ describe('crawl run (regression)', () => {
         return Promise.resolve(fn(links.map((href) => ({ href })), lim));
       },
     };
-    const opts = parseArgs(['--seeds', 'https://seed1.com https://seed2.com', '--rounds', '2', '--per-page', '5', '--top', '3']);
-    const out = await run(opts, { getPage: async () => mockPage });
+    const opts = parseArgs(['--seeds', 'https://seed1.com https://seed2.com', '--rounds', '2']);
+    const out = await run(opts, { getBrowser: async () => mockBrowserWithPage(mockPage) });
     assert.strictEqual(out.rounds, 2);
     assert.strictEqual(out.totalFetched, 5);
     assert.strictEqual(out.results.length, 5);
@@ -308,12 +399,90 @@ describe('crawl run (regression)', () => {
       $$eval: () => Promise.resolve([]),
     };
     const opts = parseArgs(['--seeds', 'https://s.com', '--rounds', '1']);
-    const out = await run(opts, { getPage: async () => mockPage });
+    const out = await run(opts, { getBrowser: async () => mockBrowserWithPage(mockPage) });
     const str = JSON.stringify(out);
     assert.doesNotThrow(() => JSON.parse(str));
     const parsed = JSON.parse(str);
     assert.strictEqual(parsed.totalFetched, 1);
     assert.strictEqual(parsed.results[0].url, 'https://s.com');
+  });
+
+  test('run with confirmEachPage and askProceed false stops after first page', async () => {
+    const mockPage = {
+      goto: () => Promise.resolve({ ok: () => true }),
+      title: () => Promise.resolve('First'),
+      $: () => Promise.resolve({ innerText: () => Promise.resolve('') }),
+      $$eval: () => Promise.resolve([]),
+    };
+    const opts = parseArgs(['--seeds', 'https://s1.com https://s2.com', '--rounds', '1', '--confirm-each-page']);
+    const out = await run(opts, {
+      getBrowser: async () => mockBrowserWithPage(mockPage),
+      askProceed: async () => false,
+    });
+    assert.strictEqual(out.totalFetched, 1);
+    assert.strictEqual(out.results[0].url, 'https://s1.com');
+  });
+
+  test('run with delayBetweenPages waits between pages', async () => {
+    const mockPage = {
+      goto: () => Promise.resolve({ ok: () => true }),
+      title: () => Promise.resolve('P'),
+      $: () => Promise.resolve({ innerText: () => Promise.resolve('') }),
+      $$eval: () => Promise.resolve([]),
+    };
+    const start = Date.now();
+    const opts = parseArgs([
+      '--seeds', 'https://a.com https://b.com',
+      '--rounds', '1',
+      '--delay-between-pages', '50',
+    ]);
+    const out = await run(opts, { getBrowser: async () => mockBrowserWithPage(mockPage) });
+    assert.strictEqual(out.totalFetched, 2);
+    assert.ok(Date.now() - start >= 45, 'delayBetweenPages respected');
+  });
+
+  test('run with confirmEachPage and askProceed continues when user says yes', async () => {
+    const mockPage = {
+      goto: () => Promise.resolve({ ok: () => true }),
+      title: () => Promise.resolve('C'),
+      $: () => Promise.resolve({ innerText: () => Promise.resolve('') }),
+      $$eval: () => Promise.resolve([]),
+    };
+    let askCount = 0;
+    const opts = parseArgs(['--seeds', 'https://s1.com https://s2.com', '--rounds', '1', '--confirm-each-page']);
+    const out = await run(opts, {
+      getBrowser: async () => mockBrowserWithPage(mockPage),
+      askProceed: async () => {
+        askCount++;
+        return true;
+      },
+    });
+    assert.strictEqual(out.totalFetched, 2);
+    assert.ok(askCount >= 1);
+  });
+
+  test('run with writeOutput dep calls callback with serialized output', async () => {
+    const mockPage = {
+      goto: () => Promise.resolve({ ok: () => true }),
+      title: () => Promise.resolve('C'),
+      $: () => Promise.resolve({ innerText: () => Promise.resolve('') }),
+      $$eval: () => Promise.resolve([]),
+    };
+    const opts = parseArgs(['--seeds', 'https://s.com', '--rounds', '1', '--out', '/any.json']);
+    let writtenStr = null;
+    let writtenPath = null;
+    const out = await run(opts, {
+      getBrowser: async () => mockBrowserWithPage(mockPage),
+      writeOutput: (str, path) => {
+        writtenStr = str;
+        writtenPath = path;
+      },
+    });
+    assert.strictEqual(out.totalFetched, 1);
+    assert.ok(writtenStr !== null);
+    assert.strictEqual(writtenPath, '/any.json');
+    const parsed = JSON.parse(writtenStr);
+    assert.strictEqual(parsed.totalFetched, 1);
   });
 
   test('run with --visited-file loads set and writes at end', async () => {
@@ -333,7 +502,7 @@ describe('crawl run (regression)', () => {
       '/v.txt',
     ]);
     const out = await run(opts, {
-      getPage: async () => mockPage,
+      getBrowser: async () => mockBrowserWithPage(mockPage),
       existsSync: (p) => p === '/v.txt',
       readFileSync: (p) => (p === '/v.txt' ? 'https://old.com\n' : ''),
       writeFileSync: (p, data) => { written[p] = data; },

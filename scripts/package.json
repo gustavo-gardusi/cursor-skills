@@ -3,17 +3,18 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Scripts for cursor-skills: skill sync, link-fetcher.",
+  "description": "Scripts for cursor-skills: skill sync, url (fetch/crawl).",
   "scripts": {
-    "test": "node --test skills/test/sync.test.js link-fetcher/test/visited.test.js link-fetcher/test/link-filter.test.js link-fetcher/test/fetch.test.js link-fetcher/test/crawl.test.js link-fetcher/test/interactive.test.js",
-    "test:skills": "node --test skills/test/sync.test.js",
-    "test:link-fetcher": "node --test link-fetcher/test/visited.test.js link-fetcher/test/link-filter.test.js link-fetcher/test/fetch.test.js link-fetcher/test/crawl.test.js link-fetcher/test/interactive.test.js",
-    "test:coverage": "node --experimental-test-coverage --test skills/test/sync.test.js link-fetcher/test/visited.test.js link-fetcher/test/link-filter.test.js link-fetcher/test/fetch.test.js link-fetcher/test/crawl.test.js link-fetcher/test/interactive.test.js",
-    "test:coverage:check": "node check-coverage.js 80",
+    "test": "node --test skills/test/sync.test.js skills/test/skills-validate.test.js url/test/visited.test.js url/test/link-filter.test.js url/test/fetch.test.js url/test/crawl.test.js url/test/interactive.test.js context/test/context.test.js",
+    "test:skills": "node --test skills/test/sync.test.js skills/test/skills-validate.test.js",
+    "test:url": "node --test url/test/visited.test.js url/test/link-filter.test.js url/test/fetch.test.js url/test/crawl.test.js url/test/interactive.test.js",
+    "test:context": "node --test context/test/context.test.js",
+    "test:coverage": "node --experimental-test-coverage --test skills/test/sync.test.js skills/test/skills-validate.test.js url/test/visited.test.js url/test/link-filter.test.js url/test/fetch.test.js url/test/crawl.test.js url/test/interactive.test.js context/test/context.test.js",
+    "test:coverage:check": "node check-coverage.js 90",
     "sync": "node skills/sync.js",
-    "fetch": "node link-fetcher/fetch.js",
-    "crawl": "node link-fetcher/crawl.js",
-    "fetch-interactive": "node link-fetcher/interactive.js"
+    "fetch": "node url/fetch.js",
+    "crawl": "node url/crawl.js",
+    "fetch-interactive": "node url/interactive.js"
   },
   "dependencies": {
     "playwright": "^1.49.0"

@@ -1,6 +1,21 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert';
+import { mkdtempSync, readFileSync, rmSync } from 'fs';
+import { join } from 'path';
+import { tmpdir } from 'os';
+import { spawnSync } from 'child_process';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 import { parseInteractiveArgs, runInteractive, pageEntry } from '../interactive.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+function mockBrowserWithPage(mockPage) {
+  return {
+    contexts: () => [{ newPage: async () => mockPage }],
+    close: async () => {},
+  };
+}
 
 describe('interactive parseInteractiveArgs', () => {
   test('defaults: top 15, iterations 1, startUrl from first URL', () => {
@@ -111,14 +126,25 @@ describe('interactive pageEntry', () => {
 });
 
 describe('interactive runInteractive', () => {
-  test('throws when no startUrl and getPage provided', async () => {
+  test('throws when no startUrl and getBrowser provided', async () => {
     await assert.rejects(
-      () => runInteractive(['--top', '5'], { getPage: async () => ({}), askFn: async () => 'q' }),
+      () => runInteractive(['--top', '5'], { getBrowser: async () => mockBrowserWithPage({}), askFn: async () => 'q' }),
       /Usage:.*start-url/
     );
   });
 
-  test('fetch error on start page throws when getPage provided', async () => {
+  test('run with no start URL exits 1 (spawn)', () => {
+    const script = join(__dirname, '..', 'interactive.js');
+    const result = spawnSync(process.execPath, [script], {
+      cwd: join(__dirname, '..', '..'),
+      encoding: 'utf8',
+      timeout: 5000,
+    });
+    assert.strictEqual(result.status, 1);
+    assert.ok(result.stderr && result.stderr.includes('start-url'));
+  });
+
+  test('fetch error on start page throws when getBrowser provided', async () => {
     const mockPage = {
       goto: () => Promise.reject(new Error('Nav failed')),
       title: () => Promise.resolve(''),
@@ -126,7 +152,7 @@ describe('interactive runInteractive', () => {
     await assert.rejects(
       () =>
         runInteractive(['https://start.com'], {
-          getPage: async () => mockPage,
+          getBrowser: async () => mockBrowserWithPage(mockPage),
           askFn: async () => 'q',
         }),
       /Nav failed/
@@ -150,7 +176,7 @@ describe('interactive runInteractive', () => {
     const inputs = ['q'];
     const askFn = async () => inputs.shift() || 'q';
     await runInteractive(['https://example.com/'], {
-      getPage: async () => mockPage,
+      getBrowser: async () => mockBrowserWithPage(mockPage),
       askFn,
     });
     assert.strictEqual(inputs.length, 0);
@@ -175,7 +201,7 @@ describe('interactive runInteractive', () => {
     const inputs = ['1', 'q'];
     const askFn = async () => inputs.shift() || 'q';
     await runInteractive(['--iterations', '2', 'https://example.com/'], {
-      getPage: async () => mockPage,
+      getBrowser: async () => mockBrowserWithPage(mockPage),
       askFn,
     });
     assert.strictEqual(gotoCount, 2);
@@ -192,9 +218,92 @@ describe('interactive runInteractive', () => {
     const inputs = ['99', 'q'];
     const askFn = async () => inputs.shift() || 'q';
     await runInteractive(['https://example.com/'], {
-      getPage: async () => mockPage,
+      getBrowser: async () => mockBrowserWithPage(mockPage),
       askFn,
     });
+    assert.strictEqual(inputs.length, 0);
+  });
+
+  test('prompt uses createInterface when askFn not provided', async () => {
+    const mockPage = {
+      goto: () => Promise.resolve({ ok: () => true }),
+      title: () => Promise.resolve(''),
+      $: () => Promise.resolve({ innerText: () => Promise.resolve('') }),
+      $$eval: (_sel, fn, base) => Promise.resolve(fn([], base)),
+    };
+    const questionCalls = [];
+    const createInterface = () => ({
+      question: (msg, cb) => {
+        questionCalls.push(msg);
+        setImmediate(() => cb('q'));
+      },
+      close: () => {},
+    });
+    await runInteractive(['https://example.com/'], {
+      getBrowser: async () => mockBrowserWithPage(mockPage),
+      createInterface,
+    });
+    assert.ok(questionCalls.length >= 1);
+    assert.ok(questionCalls[0].includes('Open next:'));
+  });
+
+  test('saves visited file on exit when --visited-file set', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'interactive-visited-'));
+    const visitedPath = join(dir, 'visited.txt');
+    const mockPage = {
+      goto: () => Promise.resolve({ ok: () => true }),
+      title: () => Promise.resolve(''),
+      $: () => Promise.resolve({ innerText: () => Promise.resolve('') }),
+      $$eval: (_sel, fn, base) =>
+        Promise.resolve(fn([{ href: 'https://example.com/one' }], base)),
+    };
+    const inputs = ['q'];
+    const written = [];
+    await runInteractive(['https://example.com/', '--visited-file', visitedPath], {
+      getBrowser: async () => mockBrowserWithPage(mockPage),
+      askFn: async () => inputs.shift() || 'q',
+      writeFileSync: (path, data) => {
+        written.push({ path, data });
+      },
+    });
+    assert.strictEqual(written.length, 1);
+    assert.strictEqual(written[0].path, visitedPath);
+    assert.ok(written[0].data.includes('https://example.com/'));
+    rmSync(dir, { recursive: true });
+  });
+
+  test('Already visited: pick that link then q', async () => {
+    const visitedContent = 'https://example.com/child\n';
+    const mockPage = {
+      goto: () => Promise.resolve({ ok: () => true }),
+      title: () => Promise.resolve(''),
+      $: () => Promise.resolve({ innerText: () => Promise.resolve('') }),
+      $$eval: (_sel, fn, base) =>
+        Promise.resolve(fn([{ href: 'https://example.com/child' }, { href: 'https://example.com/other' }], base)),
+    };
+    const inputs = ['1', 'q'];
+    const askFn = async () => inputs.shift() || 'q';
+    const logs = [];
+    const origLog = console.log;
+    console.log = (...args) => {
+      logs.push(args.join(' '));
+      origLog.apply(console, args);
+    };
+    try {
+      await runInteractive(
+        ['https://example.com/', '--visited-file', '/tmp/visited.txt'],
+        {
+          getBrowser: async () => mockBrowserWithPage(mockPage),
+          askFn,
+          existsSync: () => true,
+          readFileSync: () => visitedContent,
+        }
+      );
+      const alreadyVisitedMsg = logs.find((m) => m.includes('Already visited'));
+      assert.ok(alreadyVisitedMsg, 'expected "Already visited" message when picking visited link');
+    } finally {
+      console.log = origLog;
+    }
     assert.strictEqual(inputs.length, 0);
   });
 
@@ -209,7 +318,7 @@ describe('interactive runInteractive', () => {
     const inputs = ['1', '5', 'q'];
     const askFn = async () => inputs.shift() || 'q';
     await runInteractive(['--iterations', '1', 'https://example.com/'], {
-      getPage: async () => mockPage,
+      getBrowser: async () => mockBrowserWithPage(mockPage),
       askFn,
     });
     assert.strictEqual(inputs.length, 0);
@@ -231,7 +340,7 @@ describe('interactive runInteractive', () => {
     const inputs = ['1', 'q'];
     const askFn = async () => inputs.shift() || 'q';
     await runInteractive(['--iterations', '2', 'https://example.com/'], {
-      getPage: async () => mockPage,
+      getBrowser: async () => mockBrowserWithPage(mockPage),
       askFn,
     });
     assert.strictEqual(gotoCount, 2);
@@ -248,7 +357,7 @@ describe('interactive runInteractive', () => {
     const inputs = ['', 'q'];
     const askFn = async () => inputs.shift() ?? 'q';
     await runInteractive(['https://example.com/'], {
-      getPage: async () => mockPage,
+      getBrowser: async () => mockBrowserWithPage(mockPage),
       askFn,
     });
     assert.strictEqual(inputs.length, 0);
@@ -264,10 +373,30 @@ describe('interactive runInteractive', () => {
     const inputs = ['quit'];
     const askFn = async () => inputs.shift() || 'q';
     await runInteractive(['https://example.com/'], {
-      getPage: async () => mockPage,
+      getBrowser: async () => mockBrowserWithPage(mockPage),
       askFn,
     });
     assert.strictEqual(inputs.length, 0);
+  });
+
+  test('with --out and no writeFile mock uses writeFileSync', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'interactive-out-'));
+    const outPath = join(dir, 'pages.json');
+    const mockPage = {
+      goto: () => Promise.resolve({ ok: () => true }),
+      title: () => Promise.resolve('Sync'),
+      $: () => Promise.resolve({ innerText: () => Promise.resolve('') }),
+      $$eval: (_sel, fn, base) => Promise.resolve(fn([], base)),
+    };
+    await runInteractive(['--out', outPath, 'https://example.com/'], {
+      getBrowser: async () => mockBrowserWithPage(mockPage),
+      askFn: async () => 'q',
+    });
+    const content = readFileSync(outPath, 'utf8');
+    const payload = JSON.parse(content);
+    assert.strictEqual(payload.totalVisited, 1);
+    assert.strictEqual(payload.pages.length, 1);
+    rmSync(dir, { recursive: true });
   });
 
   test('with --out writes pages JSON when session ends (writeFile mock)', async () => {
@@ -283,7 +412,7 @@ describe('interactive runInteractive', () => {
       written.push({ path, data });
     };
     await runInteractive(['--out', 'visited.json', 'https://example.com/'], {
-      getPage: async () => mockPage,
+      getBrowser: async () => mockBrowserWithPage(mockPage),
       askFn: async () => inputs.shift() || 'q',
       writeFile,
     });
@@ -321,7 +450,7 @@ describe('interactive runInteractive', () => {
     const written = [];
     const writeFile = (path, data) => written.push({ path, data });
     await runInteractive(['--out', 'out.json', '--iterations', '2', 'https://example.com/'], {
-      getPage: async () => mockPage,
+      getBrowser: async () => mockBrowserWithPage(mockPage),
       askFn: async () => inputs.shift() || 'q',
       writeFile,
     });
@@ -342,7 +471,7 @@ describe('interactive runInteractive', () => {
     };
     let captured = null;
     await runInteractive(['--out', 'x.json', 'https://example.com/'], {
-      getPage: async () => mockPage,
+      getBrowser: async () => mockBrowserWithPage(mockPage),
       askFn: async () => 'q',
       writeFile: (_path, data) => {
         captured = data;

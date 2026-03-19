@@ -1,9 +1,58 @@
 import { mkdtempSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import { spawnSync } from 'child_process';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
-import { parseArgs, fetchUrl, run } from '../fetch.js';
+import { parseArgs, fetchUrl, run, isValidUrl, normalizeUrl, sameSite } from '../fetch.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+/** Returns a mock browser (for tests) that yields the given page from contexts()[0].newPage(). */
+function mockBrowserWithPage(mockPage) {
+  return {
+    contexts: () => [{ newPage: async () => mockPage }],
+    close: async () => {},
+  };
+}
+
+describe('fetch isValidUrl, normalizeUrl, sameSite', () => {
+  test('isValidUrl returns false for non-string or empty', () => {
+    assert.strictEqual(isValidUrl(null), false);
+    assert.strictEqual(isValidUrl(undefined), false);
+    assert.strictEqual(isValidUrl(''), false);
+    assert.strictEqual(isValidUrl(42), false);
+  });
+
+  test('isValidUrl returns false for invalid URL (catch)', () => {
+    assert.strictEqual(isValidUrl('not-a-url'), false);
+    assert.strictEqual(isValidUrl('http://['), false);
+  });
+
+  test('isValidUrl returns true for http/https', () => {
+    assert.strictEqual(isValidUrl('http://a.com'), true);
+    assert.strictEqual(isValidUrl('https://b.com'), true);
+  });
+
+  test('normalizeUrl returns null for invalid base (catch)', () => {
+    assert.strictEqual(normalizeUrl('http://example.com', 'not-a-valid-base'), null);
+  });
+
+  test('normalizeUrl strips hash and returns href', () => {
+    assert.strictEqual(normalizeUrl('https://a.com/p#x', 'https://a.com'), 'https://a.com/p');
+  });
+
+  test('sameSite returns false for invalid URL (catch)', () => {
+    assert.strictEqual(sameSite('http://a.com', 'not-url'), false);
+    assert.strictEqual(sameSite('x', 'http://b.com'), false);
+  });
+
+  test('sameSite returns true for same origin', () => {
+    assert.strictEqual(sameSite('http://a.com/1', 'http://a.com/2'), true);
+  });
+});
 
 describe('fetch parseArgs', () => {
   test('parses URLs and options', () => {
@@ -92,6 +141,17 @@ describe('fetch parseArgs', () => {
   test('parses --visited-file', () => {
     const opts = parseArgs(['--visited-file', '/path/visited.txt', 'https://x.com']);
     assert.strictEqual(opts.visitedFile, '/path/visited.txt');
+  });
+
+  test('parses --confirm-each-page and defaults wait-after-load to 3000', () => {
+    const opts = parseArgs(['--confirm-each-page', 'https://x.com']);
+    assert.strictEqual(opts.confirmEachPage, true);
+    assert.strictEqual(opts.waitAfterLoad, 3000);
+  });
+
+  test('parses --confirm-each-page with explicit wait-after-load', () => {
+    const opts = parseArgs(['--confirm-each-page', '--wait-after-load', '5000', 'https://x.com']);
+    assert.strictEqual(opts.waitAfterLoad, 5000);
   });
 
   test('parses --wait-after-load and --delay-between-pages', () => {
@@ -249,7 +309,25 @@ describe('fetch fetchUrl', () => {
     assert.strictEqual(result.ok, false);
   });
 
-  test('fetchUrl with opts.links and $$eval throw uses empty links', async () => {
+  test('fetchUrl with opts.links and invalid base yields empty normalized links', async () => {
+    const mockPage = {
+      goto: () => Promise.resolve({ ok: () => true }),
+      title: () => Promise.resolve(''),
+      $: () => Promise.resolve({ innerText: () => Promise.resolve('') }),
+      $$eval: (_sel, fn, base) => Promise.resolve(fn([{ href: 'http://example.com/page' }], base)),
+    };
+    const result = await fetchUrl(mockPage, 'invalid-base', {
+      waitUntil: 'load',
+      timeout: 5000,
+      links: true,
+      linksLimit: 10,
+      linksSameSite: true,
+    });
+    assert.strictEqual(result.ok, true);
+    assert.deepStrictEqual(result.links, { all: [], best: [] });
+  });
+
+  test('fetchUrl with opts.links and $$eval throw uses empty links (catch path)', async () => {
     const mockPage = {
       goto: () => Promise.resolve({ ok: () => true }),
       title: () => Promise.resolve(''),
@@ -269,14 +347,14 @@ describe('fetch fetchUrl', () => {
 });
 
 describe('fetch run (regression)', () => {
-  test('run with getPage mock returns fetched results for each URL', async () => {
+  test('run with getBrowser mock returns fetched results for each URL', async () => {
     const mockPage = {
       goto: () => Promise.resolve({ ok: () => true }),
       title: () => Promise.resolve('Page Title'),
       $: () => Promise.resolve({ innerText: () => Promise.resolve('Body') }),
     };
     const opts = parseArgs(['https://u1.com', 'https://u2.com']);
-    const out = await run(opts, { getPage: async () => mockPage });
+    const out = await run(opts, { getBrowser: async () => mockBrowserWithPage(mockPage) });
     assert.strictEqual(out.fetched, 2);
     assert.strictEqual(out.results.length, 2);
     assert.strictEqual(out.results[0].url, 'https://u1.com');
@@ -284,12 +362,23 @@ describe('fetch run (regression)', () => {
     assert.strictEqual(out.results[1].url, 'https://u2.com');
   });
 
-  test('run with empty urls throws when getPage provided', async () => {
+  test('run with empty urls throws when getBrowser provided', async () => {
     const mockPage = {};
     await assert.rejects(
-      () => run({ urls: [], waitUntil: 'load', timeout: 5000 }, { getPage: async () => mockPage }),
+      () => run({ urls: [], waitUntil: 'load', timeout: 5000 }, { getBrowser: async () => mockBrowserWithPage(mockPage) }),
       /Usage:/
     );
+  });
+
+  test('run with empty urls and no getBrowser exits 1 (spawn)', () => {
+    const script = join(__dirname, '..', 'fetch.js');
+    const result = spawnSync(process.execPath, [script], {
+      cwd: join(__dirname, '..', '..'),
+      encoding: 'utf8',
+      timeout: 5000,
+    });
+    assert.strictEqual(result.status, 1);
+    assert.ok(result.stderr && result.stderr.includes('Usage:'));
   });
 
   test('run with getBrowser mock returns results (no real Chromium)', async () => {
@@ -309,6 +398,57 @@ describe('fetch run (regression)', () => {
     assert.strictEqual(out.results[0].title, 'From getBrowser');
   });
 
+  test('run with getBrowser uses contexts()[0] when present', async () => {
+    const mockPage = {
+      goto: () => Promise.resolve({ ok: () => true }),
+      title: () => Promise.resolve('From context'),
+      $: () => Promise.resolve({ innerText: () => Promise.resolve('') }),
+    };
+    const mockContext = { newPage: async () => mockPage };
+    const mockBrowser = {
+      contexts: () => [mockContext],
+      close: async () => {},
+    };
+    const opts = parseArgs(['https://ctx.org']);
+    const out = await run(opts, { getBrowser: async () => mockBrowser });
+    assert.strictEqual(out.fetched, 1);
+    assert.strictEqual(out.results[0].title, 'From context');
+  });
+
+  test('run with --append and corrupt existing JSON overwrites with current run', async () => {
+    const mockPage = {
+      goto: () => Promise.resolve({ ok: () => true }),
+      title: () => Promise.resolve('Only'),
+      $: () => Promise.resolve({ innerText: () => Promise.resolve('') }),
+    };
+    const opts = parseArgs(['--out', '/any/out.json', '--append', 'https://only.com']);
+    const out = await run(opts, {
+      getBrowser: async () => mockBrowserWithPage(mockPage),
+      existsSync: () => true,
+      readFileSync: () => 'not valid json {{{',
+    });
+    assert.strictEqual(out.fetched, 1);
+    assert.strictEqual(out.results.length, 1);
+    assert.strictEqual(out.results[0].url, 'https://only.com');
+  });
+
+  test('fetchUrl with waitAfterLoad waits before extracting', async () => {
+    const start = Date.now();
+    const mockPage = {
+      goto: () => Promise.resolve({ ok: () => true }),
+      title: () => Promise.resolve('Title'),
+      $: () => Promise.resolve({ innerText: () => Promise.resolve('Body') }),
+    };
+    const result = await fetchUrl(mockPage, 'https://w.com', {
+      waitUntil: 'load',
+      timeout: 5000,
+      waitAfterLoad: 50,
+    });
+    assert.strictEqual(result.title, 'Title');
+    assert.strictEqual(result.text, 'Body');
+    assert.ok(Date.now() - start >= 45, 'waitAfterLoad respected');
+  });
+
   test('run output shape: fetched and results array with url, title, text, ok', async () => {
     const mockPage = {
       goto: () => Promise.resolve({ ok: () => true }),
@@ -316,7 +456,7 @@ describe('fetch run (regression)', () => {
       $: () => Promise.resolve({ innerText: () => Promise.resolve('Body') }),
     };
     const opts = parseArgs(['https://u.com']);
-    const out = await run(opts, { getPage: async () => mockPage });
+    const out = await run(opts, { getBrowser: async () => mockBrowserWithPage(mockPage) });
     assert.strictEqual(typeof out.fetched, 'number');
     assert.strictEqual(out.fetched, 1);
     assert.ok(Array.isArray(out.results));
@@ -334,7 +474,7 @@ describe('fetch run (regression)', () => {
       $: () => Promise.resolve({ innerText: () => Promise.resolve('') }),
     };
     const opts = parseArgs(['https://c.com', '--compact']);
-    const out = await run(opts, { getPage: async () => mockPage });
+    const out = await run(opts, { getBrowser: async () => mockBrowserWithPage(mockPage) });
     const oneLine = JSON.stringify(out);
     assert.ok(!oneLine.includes('\n'));
     const parsed = JSON.parse(oneLine);
@@ -351,7 +491,7 @@ describe('fetch run (regression)', () => {
     };
     const opts = parseArgs(['--out', '/any/path/out.json', '--append', 'https://second.com']);
     const out = await run(opts, {
-      getPage: async () => mockPage,
+      getBrowser: async () => mockBrowserWithPage(mockPage),
       existsSync: () => true,
       readFileSync: () => JSON.stringify(existing),
     });
@@ -369,7 +509,7 @@ describe('fetch run (regression)', () => {
     };
     const opts = parseArgs(['--out', '/nonexistent.json', '--append', 'https://only.com']);
     const out = await run(opts, {
-      getPage: async () => mockPage,
+      getBrowser: async () => mockBrowserWithPage(mockPage),
       existsSync: () => false,
     });
     assert.strictEqual(out.fetched, 1);
@@ -384,7 +524,7 @@ describe('fetch run (regression)', () => {
     };
     const opts = parseArgs(['--out', '/any.json', '--append', 'https://new.com']);
     const out = await run(opts, {
-      getPage: async () => mockPage,
+      getBrowser: async () => mockBrowserWithPage(mockPage),
       existsSync: () => true,
       readFileSync: () => 'not valid json',
     });
@@ -399,12 +539,83 @@ describe('fetch run (regression)', () => {
       $: () => Promise.resolve({ innerText: () => Promise.resolve('') }),
     };
     const opts = parseArgs(['https://j.com']);
-    const out = await run(opts, { getPage: async () => mockPage });
+    const out = await run(opts, { getBrowser: async () => mockBrowserWithPage(mockPage) });
     const str = JSON.stringify(out);
     assert.doesNotThrow(() => JSON.parse(str));
     const parsed = JSON.parse(str);
     assert.strictEqual(parsed.fetched, 1);
     assert.strictEqual(parsed.results[0].url, 'https://j.com');
+  });
+
+  test('run with confirmEachPage and askProceed false stops after first page', async () => {
+    const mockPage = {
+      goto: () => Promise.resolve({ ok: () => true }),
+      title: () => Promise.resolve('First'),
+      $: () => Promise.resolve({ innerText: () => Promise.resolve('') }),
+    };
+    const opts = parseArgs(['--confirm-each-page', 'https://a.com', 'https://b.com']);
+    const out = await run(opts, {
+      getBrowser: async () => mockBrowserWithPage(mockPage),
+      askProceed: async () => false,
+    });
+    assert.strictEqual(out.fetched, 1);
+    assert.strictEqual(out.results[0].url, 'https://a.com');
+  });
+
+  test('run with delayBetweenPages waits between URLs when not confirming', async () => {
+    const mockPage = {
+      goto: () => Promise.resolve({ ok: () => true }),
+      title: () => Promise.resolve('P'),
+      $: () => Promise.resolve({ innerText: () => Promise.resolve('') }),
+    };
+    const start = Date.now();
+    const opts = parseArgs(['https://x.com', 'https://y.com', '--delay-between-pages', '50']);
+    const out = await run(opts, { getBrowser: async () => mockBrowserWithPage(mockPage) });
+    assert.strictEqual(out.fetched, 2);
+    assert.ok(Date.now() - start >= 45, 'delayBetweenPages respected');
+  });
+
+  test('run with confirmEachPage and askProceed continues when user says yes', async () => {
+    const mockPage = {
+      goto: () => Promise.resolve({ ok: () => true }),
+      title: () => Promise.resolve('P1'),
+      $: () => Promise.resolve({ innerText: () => Promise.resolve('') }),
+    };
+    let askCount = 0;
+    const opts = parseArgs(['--confirm-each-page', 'https://a.com', 'https://b.com']);
+    const out = await run(opts, {
+      getBrowser: async () => mockBrowserWithPage(mockPage),
+      askProceed: async () => {
+        askCount++;
+        return true;
+      },
+    });
+    assert.strictEqual(out.fetched, 2);
+    assert.strictEqual(askCount, 1);
+  });
+
+  test('run with writeOutput dep calls callback with serialized output', async () => {
+    const mockPage = {
+      goto: () => Promise.resolve({ ok: () => true }),
+      title: () => Promise.resolve('T'),
+      $: () => Promise.resolve({ innerText: () => Promise.resolve('') }),
+    };
+    const opts = parseArgs(['https://out.com', '--out', '/path/out.json', '--compact']);
+    let writtenStr = null;
+    let writtenPath = null;
+    const out = await run(opts, {
+      getBrowser: async () => mockBrowserWithPage(mockPage),
+      writeOutput: (str, path) => {
+        writtenStr = str;
+        writtenPath = path;
+      },
+    });
+    assert.strictEqual(out.fetched, 1);
+    assert.ok(writtenStr !== null);
+    assert.strictEqual(writtenPath, '/path/out.json');
+    const parsed = JSON.parse(writtenStr);
+    assert.strictEqual(parsed.fetched, 1);
+    assert.strictEqual(parsed.results[0].url, 'https://out.com');
   });
 
   test('run with --visited-file skips URLs in file and writes set at end', async () => {
@@ -416,7 +627,7 @@ describe('fetch run (regression)', () => {
     const written = {};
     const opts = parseArgs(['--visited-file', '/v.txt', 'https://already.com', 'https://new.com']);
     const out = await run(opts, {
-      getPage: async () => mockPage,
+      getBrowser: async () => mockBrowserWithPage(mockPage),
       existsSync: (p) => p === '/v.txt',
       readFileSync: (p) => (p === '/v.txt' ? 'https://already.com\n' : ''),
       writeFileSync: (p, data) => { written[p] = data; },

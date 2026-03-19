@@ -9,7 +9,7 @@
  *   node fetch.js --connect-chrome  http://example.com https://...
  *
  * Options:
- *   --connect-chrome [url]  Use existing Chrome at CDP (default localhost:9222)
+ *   --connect-chrome [url]  Use existing Chrome at CDP (default localhost:9222). Without this, the script launches Chrome with the debug profile itself and closes it when done.
  *   --urls-file <path>      Read URLs from file (one per line)
  *   --wait-until <event>    Load condition: load | domcontentloaded | networkidle (default: load)
  *   --selector <css>        Optional: extract text from selector (default: body for main text)
@@ -21,11 +21,15 @@
  *   --links-limit <n>       Max "best" links per page (default: 50)
  *   --links-same-site       Keep only same-site links in "best" (default: true when --links)
  *   --visited-file <path>   Load/save visited URLs (one per line); skip already visited, append and write at end
- *   --wait-after-load <ms>  After load event, wait this many ms before extracting (default: 0; use 2000 for SPAs)
- *   --delay-between-pages <ms>  Wait this many ms between each page (default: 0; use 3000 to avoid hammering)
+ *   --wait-after-load <ms>  After load event, wait this many ms before extracting (default: 0; use 3000 for SPAs). Should be > delay-between-pages.
+ *   --delay-between-pages <ms>  Wait this many ms between each page (default: 0). Use 0 when using --confirm-each-page.
+ *   --confirm-each-page    Prompt "Proceed to next page? (y/n)" before each page; uses 3000 ms wait-after-load if not set.
  */
 
+import { createInterface } from 'readline';
 import { fileURLToPath } from 'url';
+import { join } from 'path';
+import { homedir } from 'os';
 import { chromium } from 'playwright';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { loadVisitedSet, saveVisitedSet, normalizeVisitedUrl } from './visited.js';
@@ -33,8 +37,9 @@ import { isNoiseUrl } from './link-filter.js';
 import { argv } from 'process';
 
 const CDP_URL = 'http://localhost:9222';
+const CHROME_DEBUG_PROFILE = join(homedir(), '.chrome-debug-profile');
 
-function isValidUrl(s) {
+export function isValidUrl(s) {
   if (typeof s !== 'string' || !s) return false;
   try {
     const u = new URL(s);
@@ -45,7 +50,7 @@ function isValidUrl(s) {
 }
 
 /** Normalize for dedupe: absolute URL without hash. */
-function normalizeUrl(url, base) {
+export function normalizeUrl(url, base) {
   try {
     const u = new URL(url, base);
     u.hash = '';
@@ -55,7 +60,7 @@ function normalizeUrl(url, base) {
   }
 }
 
-function sameSite(a, b) {
+export function sameSite(a, b) {
   try {
     const ua = new URL(a);
     const ub = new URL(b);
@@ -119,6 +124,7 @@ export function parseArgs(args = argv.slice(2)) {
     linksLimit: 50,
     linksSameSite: true,
     visitedFile: null,
+    confirmEachPage: false,
   };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -170,6 +176,9 @@ export function parseArgs(args = argv.slice(2)) {
       case '--delay-between-pages':
         opts.delayBetweenPages = parseInt(args[++i], 10) || 0;
         break;
+      case '--confirm-each-page':
+        opts.confirmEachPage = true;
+        break;
       default:
         if (!a.startsWith('--') && /^https?:\/\//i.test(a)) opts.urls.push(a);
     }
@@ -177,6 +186,9 @@ export function parseArgs(args = argv.slice(2)) {
   if (opts.urlsFile) {
     const lines = readFileSync(opts.urlsFile, 'utf8').split(/\r?\n/);
     opts.urls.push(...lines.map((l) => l.trim()).filter(Boolean));
+  }
+  if (opts.confirmEachPage && opts.waitAfterLoad === 0) {
+    opts.waitAfterLoad = 3000;
   }
   return opts;
 }
@@ -224,36 +236,33 @@ export async function fetchUrl(page, url, opts) {
 }
 
 /**
- * Run fetch: optionally use an injected getPage() to avoid real browser (for tests).
+ * Run fetch: all requests use a browser (Chrome or injected getBrowser for tests).
  * @param {object} opts - Parsed options (urls, waitUntil, timeout, selector, out, etc.)
- * @param {{ getPage?: () => Promise<import('playwright').Page> }} deps - Optional: getPage() returns a page (mocked in tests).
+ * @param {{ getBrowser?: () => Promise<import('playwright').Browser> }} deps - Optional: getBrowser() for tests (no real Chrome).
  * @returns {{ fetched: number, results: Array }} Result object; caller may write to opts.out or stdout.
  */
 export async function run(opts, deps = {}) {
   if (!opts.urls.length) {
     const msg = 'Usage: node fetch.js [--connect-chrome] [--urls-file FILE] [--out FILE] url1 [url2 ...]';
-    if (deps.getPage) throw new Error(msg);
+    if (deps.getBrowser) throw new Error(msg);
     console.error(msg);
     process.exit(1);
   }
 
-  let page;
   let browser;
-  if (deps.getPage) {
-    page = await deps.getPage();
-  } else if (deps.getBrowser) {
+  let page;
+  if (deps.getBrowser) {
     browser = await deps.getBrowser();
     const context = browser.contexts?.()?.[0] || (await browser.newContext?.());
     page = await (context.newPage?.() ?? context);
-  } else {
-    if (opts.connectChrome) {
-      const cdp = opts.cdpUrl || CDP_URL;
-      browser = await chromium.connectOverCDP(cdp);
-    } else {
-      browser = await chromium.launch({ channel: 'chrome', headless: false });
-    }
+  } else if (opts.connectChrome) {
+    const cdp = opts.cdpUrl || CDP_URL;
+    browser = await chromium.connectOverCDP(cdp);
     const context = browser.contexts()[0] || await browser.newContext();
     page = await context.newPage();
+  } else {
+    browser = await chromium.launchPersistentContext(CHROME_DEBUG_PROFILE, { channel: 'chrome', headless: false });
+    page = browser.pages()[0] || await browser.newPage();
   }
 
   const visited = getVisitedSet(opts, deps);
@@ -263,6 +272,18 @@ export async function run(opts, deps = {}) {
     const norm = normalizeVisitedUrl(url);
     return !visited || !norm || !visited.has(norm);
   });
+  let askProceed = deps.askProceed;
+  let confirmRl = null;
+  if (opts.confirmEachPage && !askProceed && !deps.getBrowser) {
+    confirmRl = createInterface({ input: process.stdin, output: process.stdout });
+    askProceed = () =>
+      new Promise((resolve) => {
+        confirmRl.question('Proceed to next page? (y/n) ', (answer) => {
+          resolve(/^[yY]/.test(answer?.trim()));
+        });
+      });
+  }
+  if (!askProceed) askProceed = () => Promise.resolve(true);
   for (let i = 0; i < urlsToFetch.length; i++) {
     const url = urlsToFetch[i];
     const norm = normalizeVisitedUrl(url);
@@ -270,8 +291,14 @@ export async function run(opts, deps = {}) {
     const result = await fetchUrl(page, url, opts);
     results.push(result);
     if (visited && norm) visited.add(norm);
-    if (delayBetween > 0 && i < urlsToFetch.length - 1) await delay(delayBetween);
+    if (opts.confirmEachPage && i < urlsToFetch.length - 1) {
+      const proceed = await askProceed(url, i + 1, urlsToFetch.length);
+      if (!proceed) break;
+    } else if (delayBetween > 0 && i < urlsToFetch.length - 1) {
+      await delay(delayBetween);
+    }
   }
+  if (confirmRl) confirmRl.close();
 
   if (browser) await browser.close();
 
@@ -295,8 +322,10 @@ export async function run(opts, deps = {}) {
       /* ignore parse errors; overwrite with current run */
     }
   }
-  if (!deps.getPage && !deps.getBrowser) {
-    const str = opts.compact ? JSON.stringify(out) : JSON.stringify(out, null, 2);
+  const str = opts.compact ? JSON.stringify(out) : JSON.stringify(out, null, 2);
+  if (deps.writeOutput) {
+    deps.writeOutput(str, opts.out);
+  } else if (!deps.getBrowser) {
     if (opts.out) writeFileSync(opts.out, str);
     else console.log(str);
   }

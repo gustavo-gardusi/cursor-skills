@@ -62,6 +62,16 @@ describe('visited loadVisitedSet', () => {
       rmSync(dir, { recursive: true });
     }
   });
+
+  test('returns empty set when readFileSync throws', () => {
+    const set = loadVisitedSet('/any/path', {
+      existsSync: () => true,
+      readFileSync: () => {
+        throw new Error('read error');
+      },
+    });
+    assert.strictEqual(set.size, 0);
+  });
 });
 
 describe('visited saveVisitedSet', () => {

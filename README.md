@@ -1,157 +1,114 @@
 # Cursor Skills
 
-Cursor IDE agent skills: markdown instructions the agent follows (e.g. create a PR, research from links). Use in chat with **/skill-name** or **@skill-name**.
+[![Tests](https://img.shields.io/badge/tests-167%20passing-brightgreen?style=for-the-badge)](scripts/)
+[![Coverage](https://img.shields.io/badge/coverage-%E2%89%A590%25-brightgreen?style=for-the-badge)](scripts/)
+
+Markdown instructions the Cursor agent follows (e.g. add context from URLs, create a PR, execute a plan). **Use in Cursor chat:** type **@skill-name** or **/skill-name** (e.g. **@context-add**, **@gh-pr**, **@context-execute**) so the agent loads that skill and follows it.
 
 ---
 
-## Where to find things
+## Quick links
 
 | You want to… | See |
 |--------------|-----|
-| **Install** (clone, deps, sync skills, use from another repo) | [Local setup](#local-setup) |
-| **Run scripts** (sync, link-fetcher, tests) | [What to run (summary)](#what-to-run-summary) |
-| **List of skills** (search, plan, execute, gh-*) | [Skills](#skills-what-each-one-does) |
-| **Scripts vs skills**, install once / use anywhere | [Scripts vs skills](#scripts-vs-skills) below |
-| **Link-fetcher** (Chrome, fetch/crawl, options) | [scripts/README.md](scripts/README.md) |
+| **Set up on macOS (M chip)** | [Setup](#setup-macos-m-chip) |
+| **Run tests** (unit + integration) | [Tests](#tests) |
+| **List of skills** | [Skills](#skills) |
+| **Sync, url scripts, Chrome, coverage** | [scripts/README.md](scripts/README.md) |
+
+---
+
+## Setup (macOS, M chip)
+
+Works on Apple Silicon with **Node.js LTS** (ARM64). No global install; dependencies live under `scripts/`.
+
+1. **Clone** (from repo root from here on):
+   ```bash
+   git clone https://github.com/gustavogardusi/cursor-skills.git && cd cursor-skills
+   ```
+2. **Install script deps:**  
+   `npm install --prefix scripts`
+3. **Install skills into Cursor:**  
+   `node scripts/skills/sync.js in`  
+   Use `in -y` to clear existing skills first. Sync replaces placeholders (e.g. `{{base:scripts/url}}`) with this repo’s path so skills work from any workspace.
+4. **Optional — add-context in Chrome mode:**  
+   Url scripts launch Chrome themselves. For a logged-in profile (e.g. GitHub), create it once:
+   ```bash
+   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --user-data-dir="$HOME/.chrome-debug-profile"
+   ```
+   Log in, close Chrome. After that, fetch/crawl runs use this profile. See [scripts/README.md](scripts/README.md) for details.
+
+**Result:** Skills are in `~/.cursor/skills-cursor/`. Use them from any project via **@skill-name** in Cursor chat.
+
+---
+
+## Using skills in the agent
+
+In **Cursor chat** (Composer or regular chat), reference a skill so the agent follows it:
+
+**Context** (research workflow; skills live under `context/`):
+
+- **@context-add** — Fetch from URLs using url scripts with real Chrome; write to `.cursor/research-context.json`. Use `--visited-file` to avoid revisiting; use `--confirm-each-page` to prompt before each page (3s load wait). Only this skill may change the context file.
+- **@context-show** — Show a short summary of the current research context (count, lastFetched, URLs). Use after context-add to confirm what was stored.
+- **@context-clear** — Clear `.cursor/research-context.json` and `.cursor/research-visited.txt` to start fresh.
+- **@context-plan** — Read context + repo (read-only), write `.cursor/research-plan.md`.
+- **@context-execute** — Read the plan and apply changes to the repo.
+
+**GitHub:** **@gh-branch**, **@gh-pull**, **@gh-pr**, **@gh-pr-review**, **@gh-push** — Branch, pull, PR, review, push.
+
+Skills are listed in Cursor’s skill picker when you type `@`. After setup, no extra env or paths are needed.
+
+---
+
+## Tests
+
+Tests are under `scripts/` and use **mocks only** (no real Chrome or network). From **repo root**:
+
+| Command | What it does |
+|---------|----------------|
+| `npm test --prefix scripts` | Run all tests (sync, skills-validate, url) |
+| `npm run test:skills --prefix scripts` | Sync + skills validation only |
+| `npm run test:url --prefix scripts` | Url scripts (fetch, crawl, interactive, visited, link-filter) only |
+| `npm run test:context --prefix scripts` | Context integration (clear → append → show → clear) |
+| `npm run test:coverage --prefix scripts` | All tests with line/branch/function coverage |
+| `npm run test:coverage:check --prefix scripts` | Fail if line coverage &lt; 90% |
+
+**Integration-style tests:** (1) The sync suite includes an **“install locally”** test: it runs `run(['in', '-y'])` with a temp `CURSOR_DIR`, installs from the real repo `skills/`, and asserts that the installed **context-add** skill has `{{base:...}}` resolved. (2) The **context** suite (`npm run test:context --prefix scripts`) runs clear → append → show → clear plus crawl and visited-file. Run all with `npm test --prefix scripts`.
+
+CI runs tests and the coverage check on push/PR to `main` (see [.github/workflows/ci.yml](.github/workflows/ci.yml)). More detail: [scripts/README.md](scripts/README.md) § Tests and coverage.
+
+---
+
+## Skills
+
+**Context** (nested under `context/`: add → clear → plan → execute):
+
+| Skill | Purpose |
+|-------|---------|
+| **context-add** | Fetch from links using url scripts with real Chrome. Writes `.cursor/research-context.json`; use `--visited-file` and optionally `--confirm-each-page` (3s wait, then prompt). Only this skill may change the context file. |
+| **context-show** | Show current context summary (count, lastFetched, URLs). Use after context-add to confirm what was stored. Read-only. |
+| **context-clear** | Clear `.cursor/research-context.json` and `.cursor/research-visited.txt` to reset the research workflow. |
+| **context-plan** | Read context + repo (read-only), write `.cursor/research-plan.md`. |
+| **context-execute** | Read the plan and apply it to the repo (edits code/config). |
+
+**GitHub:**
+
+| Skill | Purpose |
+|-------|---------|
+| **gh-branch** | New branch from main; name from ticket or description. |
+| **gh-pull** | Pull, merge main/upstream, resolve conflicts. |
+| **gh-pr** | Create or update PR (description only; no commit/push). |
+| **gh-pr-review** | Apply PR review comments and fix failed checks. |
+| **gh-push** | Format, lint, test → commit and push. |
 
 ---
 
 ## Scripts vs skills
 
-- **Scripts** (`scripts/`) — Reusable CLI tools: **sync** (skills ↔ Cursor), **link-fetcher** (fetch/crawl in Chrome). Scripts are shared; more than one skill can use the same script.
-- **Skills** (`skills/`) — Agent workflows that *call* those scripts. One skill can use one or more scripts.
-- **Install once:** Clone this repo → install deps → sync skills. Then use skills from **any project** by setting **`CURSOR_SKILLS_REPO`** to this repo’s path so the agent can run the scripts (e.g. **search** uses link-fetcher).
+- **Scripts** (`scripts/`) — CLI tools: **sync** (skills ↔ Cursor), **url** (fetch/crawl in Chrome), **context** (clear/show research context). Shared by skills.
+- **Skills** (`skills/`) — Agent workflows that call those scripts. Placeholders like `{{base:scripts/url}}` are replaced at **sync in** with the repo path so installed skills are self-contained.
 
----
+**Reinstall after editing a skill:**  
+`node scripts/skills/sync.js in`
 
-## Local setup
-
-**Repo root** = directory that contains `scripts/` and `skills/`.
-
-1. **Clone** the repo (use your fork URL if you have one).
-2. **Install** script dependencies (Node.js LTS): `npm install --prefix scripts`
-3. **Install skills into Cursor:** `node scripts/skills/sync.js in` (use `in -y` to clear existing first).
-4. **Use from another project:** Set **`CURSOR_SKILLS_REPO`** to the **absolute path** of this repo (e.g. in your shell config: `~/.zshrc`, `~/.bashrc`, or `~/.profile`). Then the agent can run scripts when your workspace is a different repo.
-5. **Optional (for search):** Start a second Chrome window with a debug profile so link-fetcher can attach — see [Chrome profile for search](#5-optional-chrome-profile-for-search) below.
-
-### 1. Clone the repo
-
-```bash
-git clone https://github.com/gustavogardusi/cursor-skills.git
-cd cursor-skills
-```
-
-Run the following from this directory (repo root).
-
-### 2. Install script dependencies
-
-Requires **Node.js** (LTS). Check with `node -v`. Dependencies install under `scripts/` only (no global install).
-
-```bash
-npm install --prefix scripts
-```
-
-### 3. Install skills into Cursor
-
-```bash
-node scripts/skills/sync.js in
-```
-
-On first run this just installs. If `~/.cursor/skills-cursor` already has skills, you’ll be prompted to clear and install fresh. To clear first without prompting:
-
-```bash
-node scripts/skills/sync.js in -y
-```
-
-### 4. Shell environment (for use from another repo)
-
-- **Workspace is this repo:** Nothing else needed; skills use `scripts/link-fetcher` from the workspace root.
-- **Workspace is another project:** Set **`CURSOR_SKILLS_REPO`** to the **absolute path** of this repo so the agent can run scripts (e.g. link-fetcher for **search**).
-
-Add the export to whichever config file your shell sources (variations by environment):
-
-- **zsh:** `~/.zshrc`
-- **bash:** `~/.bashrc` or `~/.bash_profile`
-- **shared (login shells):** `~/.profile`
-
-From repo root, appending to a specific file (adjust the path if you use a different one):
-
-```bash
-echo 'export CURSOR_SKILLS_REPO="'"$(pwd)"'"' >> ~/.zshrc
-source ~/.zshrc
-```
-
-Or edit your shell config by hand and add: `export CURSOR_SKILLS_REPO="$HOME/github/personal/cursor-skills"` (adjust path).
-
-**Restart Cursor** after changing your shell config (or open Cursor from a terminal that has already sourced it) so the agent sees the new variable.
-
-**Alternative:** Copy **`.env.example`** to **`.env`** and set `CURSOR_SKILLS_REPO` there (if your IDE loads `.env` from the workspace).
-
-### 5. (Optional) Chrome profile for search
-
-The **search** skill uses link-fetcher, which attaches to Chrome via remote debugging. Keep your normal Chrome for daily use; for **search**, use a **second** Chrome window with its own profile:
-
-1. In Terminal, start Chrome with a dedicated user-data dir and remote debugging (opens a new window):
-
-```bash
-"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
-  --remote-debugging-port=9222 \
-  --user-data-dir="$HOME/.chrome-debug-profile"
-```
-
-2. In that window, log in to any sites you need (e.g. GitHub). Leave the window open.
-3. **Then** run **search** (or link-fetcher with `--connect-chrome`); it attaches on port 9222 and opens each link there.
-
-More detail: [scripts/README.md](scripts/README.md) (§ First-time setup: Chrome profile and login).
-
----
-
-## Skills (what each one does)
-
-### Search, plan, execute (research workflow)
-
-Three-step workflow: **search** (fetch links → context file) → **plan** (read context + repo → plan file) → **execute** (read plan → change repo). **search** and **plan** do not change the repo; they only read/write **`.cursor/`** (add `.cursor/` to `.gitignore`). Only **search** may change the context file; only **execute** modifies the codebase.
-
-| Skill | What it does |
-|-------|----------------|
-| **search** | Fetch-only: receive links, run BFS in Chrome via `scripts/link-fetcher` (fetch.js or crawl.js). Tunable: BFS layers, nodes per layer, wait after load, delay between pages. Write or merge into **`.cursor/research-context.json`**; use `--visited-file .cursor/research-visited.txt` to skip already-visited URLs. Does not modify the repo. |
-| **plan** | Read **`.cursor/research-context.json`** (read-only) and the repo (read-only). Craft a plan; write **`.cursor/research-plan.md`** only. Re-running overwrites the plan file; never touches the context file or the repo. |
-| **execute** | Read **`.cursor/research-plan.md`** and apply the implementation plan: run commands, add/change/update files. Only the repo is modified; does not edit `.cursor/`. Use after **plan** is done. |
-
-### GitHub
-
-| Skill | What it does |
-|-------|----------------|
-| **gh-branch** | Create a new branch from main; name it from a Jira key, GitHub issue, or short description. |
-| **gh-pull** | Pull the current branch, merge main and/or upstream, resolve conflicts, push if merged. |
-| **gh-pr** | Create or update the PR to main/upstream: summarize changes and write the description; does not add/commit/push. |
-| **gh-pr-review** | Load PR comments and failed checks; fix each with minimal changes scoped to the PR diff. |
-| **gh-push** | Run format, lint, and tests; then make a summarized commit and push on the current branch. |
-
----
-
-## Quick start
-
-1. **Local setup (once):** [Local setup](#local-setup) — clone → `npm install --prefix scripts` → `node scripts/skills/sync.js in`. For other repos set `CURSOR_SKILLS_REPO` in your shell config (§4); restart Cursor after that. For **search** optionally start Chrome with debug profile.
-2. **Verify setup (optional):** From repo root run `npm test --prefix scripts`.
-3. In Cursor chat use **@search**, **@plan**, **@execute**, **@gh-pr**, etc.
-4. Script details (sync, link-fetcher, Chrome, tests): **[scripts/README.md](scripts/README.md)**.
-
-To add or edit skills: change **`skills/…/SKILL.md`**, then run **`node scripts/skills/sync.js in`** again.
-
----
-
-## What to run (summary)
-
-| When | Commands (from repo root) |
-|------|----------------------------|
-| **First time** | Clone repo → `npm install --prefix scripts` → `node scripts/skills/sync.js in`. Optionally: add `export CURSOR_SKILLS_REPO="/path/to/cursor-skills"` to your shell config (`~/.zshrc`, `~/.bashrc`, or `~/.profile`), then `source` it and **restart Cursor**. |
-| **Use search from another repo** | Set `CURSOR_SKILLS_REPO` in your shell config. **Restart Cursor** so it sees the variable. **First** open a second Chrome window with `--remote-debugging-port=9222 --user-data-dir="$HOME/.chrome-debug-profile"`; **then** run the skill. |
-| **Reinstall skills after editing** | `node scripts/skills/sync.js in` |
-| **Run tests** | `npm test --prefix scripts` |
-| **Run tests with coverage** | `npm run test:coverage --prefix scripts` |
-| **Check coverage threshold (80%)** | `npm run test:coverage:check --prefix scripts` |
-
-**CI:** On push and pull requests to `main`, [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs tests and the 80% coverage check. Add a lint step to the workflow when the project adds a lint script.
-
-Tests cover: skills sync, link-fetcher (fetch, crawl, interactive, visited, link-filter). All use mocks (no real Chrome or network). See [scripts/README.md](scripts/README.md) § Tests and coverage.
+Full script and test docs: **[scripts/README.md](scripts/README.md)**.

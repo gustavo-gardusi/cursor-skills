@@ -25,12 +25,15 @@
 import { createInterface } from 'readline';
 import { argv } from 'process';
 import { fileURLToPath } from 'url';
+import { join } from 'path';
+import { homedir } from 'os';
 import { writeFileSync, existsSync, readFileSync } from 'fs';
 import { chromium } from 'playwright';
 import { parseArgs, fetchUrl } from './fetch.js';
 import { loadVisitedSet, saveVisitedSet, normalizeVisitedUrl } from './visited.js';
 
 const CDP_URL = 'http://localhost:9222';
+const CHROME_DEBUG_PROFILE = join(homedir(), '.chrome-debug-profile');
 
 function parseInteractiveArgs(args) {
   const rest = [];
@@ -112,7 +115,7 @@ function printLinks(links, top) {
 /**
  * Run interactive loop. Uses argv when no args/deps provided.
  * @param {string[]} [args] - CLI args (default: argv.slice(2))
- * @param {{ getPage?: () => Promise<import('playwright').Page>, askFn?: (message: string) => Promise<string> }} [deps] - Optional: getPage and askFn for tests (no Chrome/readline)
+ * @param {{ getBrowser?: () => Promise<import('playwright').Browser>, askFn?: (message: string) => Promise<string> }} [deps] - Optional: getBrowser and askFn for tests (no real Chrome/readline)
  */
 function pageEntry(result) {
   const entry = {
@@ -130,7 +133,7 @@ async function runInteractive(args = argv.slice(2), deps = {}) {
   const { startUrl, top, iterations, out: outPath, compact, visitedFile, fetchOpts } = parseInteractiveArgs(args);
   if (!startUrl) {
     const msg = 'Usage: node interactive.js [--top N] [--iterations N] [--connect-chrome] <start-url>';
-    if (deps.getPage) throw new Error(msg);
+    if (deps.getBrowser) throw new Error(msg);
     console.error(msg);
     process.exit(1);
   }
@@ -138,22 +141,24 @@ async function runInteractive(args = argv.slice(2), deps = {}) {
   let browser;
   let page;
   let rl;
-  if (deps.getPage) {
-    page = await deps.getPage();
-  } else {
-    if (fetchOpts.connectChrome) {
-      browser = await chromium.connectOverCDP(fetchOpts.cdpUrl || CDP_URL);
-    } else {
-      browser = await chromium.launch({ channel: 'chrome', headless: false });
-    }
+  if (deps.getBrowser) {
+    browser = await deps.getBrowser();
+    const context = browser.contexts?.()?.[0] || (await browser.newContext?.());
+    page = await (context.newPage?.() ?? context);
+  } else if (fetchOpts.connectChrome) {
+    browser = await chromium.connectOverCDP(fetchOpts.cdpUrl || CDP_URL);
     const context = browser.contexts?.[0] || (await browser.newContext());
     page = await context.newPage();
+  } else {
+    browser = await chromium.launchPersistentContext(CHROME_DEBUG_PROFILE, { channel: 'chrome', headless: false });
+    page = browser.pages()[0] || await browser.newPage();
   }
 
+  const createRl = deps.createInterface ?? createInterface;
   const prompt = deps.askFn
     ? (msg) => deps.askFn(msg)
     : () => {
-        if (!rl) rl = createInterface({ input: process.stdin, output: process.stdout });
+        if (!rl) rl = createRl({ input: process.stdin, output: process.stdout });
         return ask(rl, `\nOpen next: [1-${top}] or Enter for 1, q to quit: `);
       };
 
@@ -177,7 +182,7 @@ async function runInteractive(args = argv.slice(2), deps = {}) {
       if (n) visited.add(n);
     }
     if (result.error) {
-      if (deps.getPage) throw new Error(result.error);
+      if (deps.getBrowser) throw new Error(result.error);
       console.error('Error:', result.error);
       if (rl) rl.close();
       if (browser) await browser.close();
