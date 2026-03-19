@@ -159,6 +159,12 @@ describe('fetch parseArgs', () => {
     assert.strictEqual(opts.waitAfterLoad, 2000);
     assert.strictEqual(opts.delayBetweenPages, 3000);
   });
+
+  test('parses --retries and --failed-file', () => {
+    const opts = parseArgs(['--retries', '5', '--failed-file', '/f.txt', 'https://x.com']);
+    assert.strictEqual(opts.retries, 5);
+    assert.strictEqual(opts.failedFile, '/f.txt');
+  });
 });
 
 describe('fetch fetchUrl', () => {
@@ -638,5 +644,29 @@ describe('fetch run (regression)', () => {
     const lines = written['/v.txt'].trim().split('\n').sort();
     assert.ok(lines.some((u) => u.startsWith('https://already.com')), 'visited file should contain already.com');
     assert.ok(lines.some((u) => u.startsWith('https://new.com')), 'visited file should contain new.com');
+  });
+
+  test('run retries on non-OK response and writes failed URLs to --failed-file', async () => {
+    const mockPage = {
+      goto: (url) => Promise.resolve({ ok: () => url === 'https://good.com' }),
+      title: () => Promise.resolve(''),
+      $: () => Promise.resolve({ innerText: () => Promise.resolve('') }),
+    };
+    const written = {};
+    const opts = parseArgs([
+      '--visited-file', '/v.txt', '--failed-file', '/f.txt', '--retries', '2',
+      'https://bad.com', 'https://good.com',
+    ]);
+    const out = await run(opts, {
+      getBrowser: async () => mockBrowserWithPage(mockPage),
+      writeFileSync: (p, data) => { written[p] = data; },
+    });
+    assert.strictEqual(out.results.length, 2);
+    assert.strictEqual(out.results[0].ok, false);
+    assert.strictEqual(out.results[1].ok, true);
+    assert.deepStrictEqual(out.failed, ['https://bad.com']);
+    assert.strictEqual(written['/f.txt'].trim(), 'https://bad.com');
+    assert.ok(written['/v.txt'].includes('https://good.com'));
+    assert.ok(!written['/v.txt'].includes('https://bad.com'));
   });
 });

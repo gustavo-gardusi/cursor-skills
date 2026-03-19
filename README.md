@@ -1,6 +1,6 @@
 # Cursor Skills
 
-[![Tests](https://img.shields.io/badge/tests-167%20passing-brightgreen?style=for-the-badge)](scripts/)
+[![Tests](https://img.shields.io/badge/tests-171%20passing-brightgreen?style=for-the-badge)](scripts/)
 [![Coverage](https://img.shields.io/badge/coverage-%E2%89%A590%25-brightgreen?style=for-the-badge)](scripts/)
 
 Markdown instructions the Cursor agent follows (e.g. add context from URLs, create a PR, execute a plan). **Use in Cursor chat:** type **@skill-name** or **/skill-name** (e.g. **@context-add**, **@gh-pr**, **@context-execute**) so the agent loads that skill and follows it.

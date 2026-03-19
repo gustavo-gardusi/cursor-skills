@@ -124,7 +124,9 @@ When running the fetcher manually: `--out .cursor/research-context.json` (and `-
 - **interactive.js** — Single start URL → show top N same-site links → wait for input (1–N or q) → open chosen link; repeat. Defaults: **top 15**, **1 iteration**. Optional `--out` writes visited pages when done.
 - **crawl.js** — Seed URLs + `--rounds Y` → multi-round crawl; extracts all links that pass the filter (no images/ads/assets), no top-X limit; downstream (e.g. cursor skill) can filter further → JSON.
 
-**Visited set (avoid re-visiting):** All three scripts support **`--visited-file <path>`**. The file stores one URL per line (LLM-friendly: plain text, easy to grep or feed to a model). On start, the script loads this set and skips any URL already in it; after each visit it adds the URL; when the run finishes it writes the full set back to the file. Use the same path across runs to accumulate a growing “already seen” list and avoid re-fetching the same page.
+**Visited set (avoid re-visiting):** All three scripts support **`--visited-file <path>`**. The file stores one URL per line (LLM-friendly: plain text, easy to grep or feed to a model). On start, the script loads this set and skips any URL already in it; after each **successful** visit it adds the URL; when the run finishes it writes the full set back to the file. Use the same path across runs to accumulate a growing “already seen” list and avoid re-fetching the same page.
+
+**Retries and failed URLs:** Fetch and crawl support **`--retries <n>`** (default 3). On 404 or other non-OK response, the script retries the URL (2s apart). If it still fails after retries, the URL is **not** added to the visited set and is appended to **`--failed-file <path>`** (e.g. `.cursor/research-failed.txt`). So you can log in and re-run; those URLs will be tried again. Use **`--failed-file .cursor/research-failed.txt`** when running context-add.
 
 **Link filtering (content-only links):** When extracting links, the scripts drop **images**, **static assets**, and **out-of-scope** URLs so you get content pages only (better for research and LLMs). Filtered out:
 
@@ -202,9 +204,9 @@ node scripts/url/fetch.js --connect-chrome --out out.json --append https://c.com
 
 | Script         | Main options |
 |----------------|---------------|
-| **fetch.js**   | `--connect-chrome [url]`, `--urls-file <path>`, `--out <path>`, `--compact`, `--append`, `--visited-file <path>`, `--wait-until`, `--wait-after-load <ms>`, `--delay-between-pages <ms>`, `--confirm-each-page`, `--selector`, `--timeout`, `--links`, `--links-limit`, `--links-same-site` / `--no-links-same-site`. |
+| **fetch.js**   | `--connect-chrome [url]`, `--urls-file <path>`, `--out <path>`, `--compact`, `--append`, `--visited-file <path>`, `--failed-file <path>`, `--retries <n>`, `--wait-until`, `--wait-after-load <ms>`, `--delay-between-pages <ms>`, `--confirm-each-page`, `--selector`, `--timeout`, `--links`, `--links-limit`, `--links-same-site` / `--no-links-same-site`. |
 | **interactive.js** | `<start-url>`, `--top <n>`, `--iterations <n>`, `--out <path>`, `--compact`, `--visited-file <path>`, `--connect-chrome [url]`, `--timeout`. |
-| **crawl.js**   | `--seeds "url1 url2"`, `--seeds-file <path>`, `--rounds Y`, `--visited-file <path>`, `--wait-after-load <ms>`, `--delay-between-pages <ms>`, `--confirm-each-page`, `--connect-chrome [url]`, `--out <path>`, `--compact`, `--append`. |
+| **crawl.js**   | `--seeds "url1 url2"`, `--seeds-file <path>`, `--rounds Y`, `--visited-file <path>`, `--failed-file <path>`, `--retries <n>`, `--wait-after-load <ms>`, `--delay-between-pages <ms>`, `--confirm-each-page`, `--connect-chrome [url]`, `--out <path>`, `--compact`, `--append`. |
 
 Used by the **context-add** (research) skill.
 

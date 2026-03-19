@@ -75,6 +75,12 @@ describe('crawl parseArgs', () => {
     assert.strictEqual(opts.visitedFile, 'visited.txt');
   });
 
+  test('parses --retries and --failed-file', () => {
+    const opts = parseArgs(['--seeds', 'https://x.com', '--retries', '4', '--failed-file', 'failed.txt']);
+    assert.strictEqual(opts.retries, 4);
+    assert.strictEqual(opts.failedFile, 'failed.txt');
+  });
+
   test('parses --confirm-each-page and defaults wait-after-load to 3000', () => {
     const opts = parseArgs(['--seeds', 'https://x.com', '--confirm-each-page']);
     assert.strictEqual(opts.confirmEachPage, true);
@@ -513,5 +519,30 @@ describe('crawl run (regression)', () => {
     const lines = written['/v.txt'].trim().split('\n').sort();
     assert.ok(lines.some((u) => u.startsWith('https://old.com')), 'visited file should contain old.com');
     assert.ok(lines.some((u) => u.startsWith('https://new.com')), 'visited file should contain new.com');
+  });
+
+  test('run retries on non-OK and writes failed URLs to --failed-file', async () => {
+    const mockPage = {
+      goto: (url) => Promise.resolve({ ok: () => url === 'https://ok.com' }),
+      title: () => Promise.resolve(''),
+      $: () => Promise.resolve({ innerText: () => Promise.resolve('') }),
+      $$eval: () => Promise.resolve([]),
+    };
+    const written = {};
+    const opts = parseArgs([
+      '--seeds', 'https://fail.com https://ok.com',
+      '--rounds', '1', '--visited-file', '/v.txt', '--failed-file', '/f.txt', '--retries', '2',
+    ]);
+    const out = await run(opts, {
+      getBrowser: async () => mockBrowserWithPage(mockPage),
+      writeFileSync: (p, data) => { written[p] = data; },
+    });
+    assert.strictEqual(out.results.length, 2);
+    assert.strictEqual(out.results[0].ok, false);
+    assert.strictEqual(out.results[1].ok, true);
+    assert.deepStrictEqual(out.failed, ['https://fail.com']);
+    assert.strictEqual(written['/f.txt'].trim(), 'https://fail.com');
+    assert.ok(written['/v.txt'].includes('https://ok.com'));
+    assert.ok(!written['/v.txt'].includes('https://fail.com'));
   });
 });

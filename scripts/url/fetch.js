@@ -24,6 +24,8 @@
  *   --wait-after-load <ms>  After load event, wait this many ms before extracting (default: 0; use 3000 for SPAs). Should be > delay-between-pages.
  *   --delay-between-pages <ms>  Wait this many ms between each page (default: 0). Use 0 when using --confirm-each-page.
  *   --confirm-each-page    Prompt "Proceed to next page? (y/n)" before each page; uses 3000 ms wait-after-load if not set.
+ *   --retries <n>          Retry each URL up to n times on non-OK response (404, 5xx); default 3.
+ *   --failed-file <path>   Write URLs that still failed after retries (one per line); e.g. .cursor/research-failed.txt. Do not add them to visited so user can log in and re-run.
  */
 
 import { createInterface } from 'readline';
@@ -38,6 +40,7 @@ import { argv } from 'process';
 
 const CDP_URL = 'http://localhost:9222';
 const CHROME_DEBUG_PROFILE = join(homedir(), '.chrome-debug-profile');
+const RETRY_DELAY_MS = 2000;
 
 export function isValidUrl(s) {
   if (typeof s !== 'string' || !s) return false;
@@ -125,6 +128,8 @@ export function parseArgs(args = argv.slice(2)) {
     linksSameSite: true,
     visitedFile: null,
     confirmEachPage: false,
+    retries: 3,
+    failedFile: null,
   };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -178,6 +183,12 @@ export function parseArgs(args = argv.slice(2)) {
         break;
       case '--confirm-each-page':
         opts.confirmEachPage = true;
+        break;
+      case '--retries':
+        opts.retries = Math.max(0, parseInt(args[++i], 10) ?? 3);
+        break;
+      case '--failed-file':
+        opts.failedFile = args[++i];
         break;
       default:
         if (!a.startsWith('--') && /^https?:\/\//i.test(a)) opts.urls.push(a);
@@ -284,13 +295,22 @@ export async function run(opts, deps = {}) {
       });
   }
   if (!askProceed) askProceed = () => Promise.resolve(true);
+  const failed = [];
+  const retries = Math.max(0, opts.retries ?? 3);
   for (let i = 0; i < urlsToFetch.length; i++) {
     const url = urlsToFetch[i];
     const norm = normalizeVisitedUrl(url);
     if (visited && norm && visited.has(norm)) continue;
-    const result = await fetchUrl(page, url, opts);
+    let result = await fetchUrl(page, url, opts);
+    let attempts = 1;
+    while (!result.ok && attempts < retries) {
+      await delay(RETRY_DELAY_MS);
+      result = await fetchUrl(page, url, opts);
+      attempts++;
+    }
     results.push(result);
-    if (visited && norm) visited.add(norm);
+    if (result.ok && visited && norm) visited.add(norm);
+    if (!result.ok) failed.push(url);
     if (opts.confirmEachPage && i < urlsToFetch.length - 1) {
       const proceed = await askProceed(url, i + 1, urlsToFetch.length);
       if (!proceed) break;
@@ -307,7 +327,16 @@ export async function run(opts, deps = {}) {
     saveVisitedSet(opts.visitedFile, visited, { writeFileSync: write });
   }
 
-  let out = { fetched: results.length, results };
+  if (opts.failedFile && failed.length) {
+    const write = deps.writeFileSync ?? writeFileSync;
+    const sorted = [...new Set(failed)].sort();
+    write(opts.failedFile, sorted.join('\n') + '\n');
+    if (!deps.getBrowser) {
+      console.error(`Failed to fetch (${failed.length} URL(s)); wrote to ${opts.failedFile}. Consider logging in and re-running.`);
+    }
+  }
+
+  let out = { fetched: results.length, results, failed };
   const exists = deps.existsSync ?? existsSync;
   const readFile = deps.readFileSync ?? readFileSync;
   if (opts.append && opts.out && exists(opts.out)) {
@@ -317,6 +346,7 @@ export async function run(opts, deps = {}) {
       out = {
         fetched: prev.length + results.length,
         results: [...prev, ...results],
+        failed: out.failed,
       };
     } catch {
       /* ignore parse errors; overwrite with current run */

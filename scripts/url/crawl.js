@@ -26,6 +26,7 @@ import { isNoiseUrl } from './link-filter.js';
 
 const CDP_URL = 'http://localhost:9222';
 const CHROME_DEBUG_PROFILE = join(homedir(), '.chrome-debug-profile');
+const RETRY_DELAY_MS = 2000;
 
 export function parseArgs(args = argv.slice(2)) {
   const opts = {
@@ -43,6 +44,8 @@ export function parseArgs(args = argv.slice(2)) {
     append: false,
     visitedFile: null,
     confirmEachPage: false,
+    retries: 3,
+    failedFile: null,
   };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -86,6 +89,12 @@ export function parseArgs(args = argv.slice(2)) {
         break;
       case '--confirm-each-page':
         opts.confirmEachPage = true;
+        break;
+      case '--retries':
+        opts.retries = Math.max(0, parseInt(args[++i], 10) ?? 3);
+        break;
+      case '--failed-file':
+        opts.failedFile = args[++i];
         break;
     }
   }
@@ -198,6 +207,8 @@ export async function run(opts, deps = {}) {
   if (!askProceed) askProceed = () => Promise.resolve(true);
 
   const delayBetween = opts.delayBetweenPages || 0;
+  const retries = Math.max(0, opts.retries ?? 3);
+  const failed = [];
   let stoppedByUser = false;
   for (let round = 0; round < opts.rounds && !stoppedByUser; round++) {
     const allLinksThisRound = [];
@@ -206,8 +217,15 @@ export async function run(opts, deps = {}) {
       const url = urlsThisRound[i];
       const norm = normalizeVisitedUrl(url) || url;
       if (fetchedUrls.has(norm)) continue;
-      fetchedUrls.add(norm);
-      const data = await fetchPage(page, url, opts);
+      let data = await fetchPage(page, url, opts);
+      let attempts = 1;
+      while (!data.ok && attempts < retries) {
+        await delay(RETRY_DELAY_MS);
+        data = await fetchPage(page, url, opts);
+        attempts++;
+      }
+      if (data.ok) fetchedUrls.add(norm);
+      else failed.push(url);
       allResults.push(data);
       allLinksThisRound.push(...(data.links || []));
       if (opts.confirmEachPage && (i < urlsThisRound.length - 1 || round < opts.rounds - 1)) {
@@ -233,10 +251,20 @@ export async function run(opts, deps = {}) {
     saveVisitedSet(opts.visitedFile, fetchedUrls, { writeFileSync: write });
   }
 
+  if (opts.failedFile && failed.length) {
+    const write = deps.writeFileSync ?? writeFileSync;
+    const sorted = [...new Set(failed)].sort();
+    write(opts.failedFile, sorted.join('\n') + '\n');
+    if (!deps.getBrowser) {
+      console.error(`Failed to fetch (${failed.length} URL(s)); wrote to ${opts.failedFile}. Consider logging in and re-running.`);
+    }
+  }
+
   let out = {
     rounds: opts.rounds,
     totalFetched: allResults.length,
     results: allResults,
+    failed,
   };
   if (opts.append && opts.out && exists(opts.out)) {
     try {
@@ -246,6 +274,7 @@ export async function run(opts, deps = {}) {
         rounds: opts.rounds,
         totalFetched: prev.length + allResults.length,
         results: [...prev, ...allResults],
+        failed: out.failed,
       };
     } catch {
       /* ignore parse errors; overwrite with current run */
