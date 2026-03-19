@@ -39,7 +39,7 @@ Compare README (and any other main docs) to the current repo. Apply minimal edit
 ### 3. Summarized commit and push to current branch
 
 - **Clean temp dirs** — Remove any temporary output dirs that should not be committed (e.g. temp dirs from url fetch runs). Use a random temp path for any one-off output during this run, then delete it so the working tree has no leftover temp dirs.
-- **Stage** — `git add .` (or stage relevant paths if the user prefers).
+- **Stage** — default to adding only the paths changed by the workflow/docs updates (`git add <path...>`). Use `git add .` only if the change list is very broad or the user explicitly asks for that behavior.
 - **Message** — One short line summarizing the change (e.g. from `git diff --stat` or a brief summary).
 - **Commit** — `git commit -m "<summary>"`.
 - **Push** — `git push` (push to the current branch’s upstream).

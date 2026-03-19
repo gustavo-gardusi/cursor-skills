@@ -1,7 +1,7 @@
 ---
 name: context-add
 description: >-
-  Follow destination pages with a connected Chrome session, monitor page transitions,
+  Follow destination pages with a session-based browser launch, monitor page transitions,
   and only append to .cursor/research-context.json when expected content is visible.
   Handle blockers (login/SSO/permissions/thread visibility), summarize each page state
   as current vs expected, and keep user in control with clear next actions.
@@ -18,7 +18,10 @@ description: >-
   - **Action:** what user needs to do next (login, open thread/view, retry, or skip).
 
 Use `--links --links-limit 15` to keep link context available, but do not enqueue more URLs from links automatically.
-**Prerequisite:** Chrome must be running with the shared profile and remote debugging. If not, run **@browser-open** first.
+
+**Execution model:** each invocation starts its own browser session with the shared
+profile (`$HOME/.chrome-debug-profile`), opens each provided URL in its own tab, and
+closes the browser when the flow is complete. The same profile is reused across agents and projects.
 
 **Single store for "done" pages:** **`.cursor/research-context.json`** holds **only pages that reached expected content** (or explicit terminal blockers such as hard 404 / permanent access blocks).
 
@@ -31,10 +34,11 @@ Use `--links --links-limit 15` to keep link context available, but do not enqueu
 ## Destination tracking flow
 
 1. **Collect input URLs** — One or many URLs from the user.
-2. **Open and observe** — Start or attach to Chrome with **`--connect-chrome`** and run fetch in observer mode.
+2. **Open and observe** — Start a dedicated browser session (or attach intentionally if needed) and run fetch in observer mode.
    - Use one tab per URL and keep the session open while the user fixes blockers.
-   - `node {{base:scripts/url}}/fetch.js --connect-chrome --observe --observe-ms 0 --observe-interval 2000 --links --links-limit 15 --visited-file .cursor/research-visited.txt URL`
+   - `node {{base:scripts/url}}/fetch.js --observe --observe-ms 0 --observe-interval 2000 --links --links-limit 15 --visited-file .cursor/research-visited.txt URL`
    - `--observe-ms 0` keeps the observer alive for the conversation; replace with a short ms value when needed.
+   - `--observe-close-on-destination` closes each destination tab; add `--browser-channel chromium` (or `BROWSER_CHANNEL=chromium`) to use a non-Chrome icon/browser.
 3. **Classify each snapshot** from the URL:
    - **Login / SSO / permission blocker**: keep current state as blocker, do not append. Say:
      - *Current:* "SSO page / auth prompt"
@@ -44,11 +48,11 @@ Use `--links --links-limit 15` to keep link context available, but do not enqueu
    - **Destination reached** (destination-specific expected content): mark as done.
 4. **Append done pages** — For destination pages, run one final non-observe pass with `--out` so the final JSON has the expected result shape, then pass that JSON to **`append-result.js`**.
    - Final pass example (more data):
-   - `node {{base:scripts/url}}/fetch.js --connect-chrome --links --links-limit 50 --out /tmp/fetch-out.json <destination url>`
+   - `node {{base:scripts/url}}/fetch.js --links --links-limit 50 --out /tmp/fetch-out.json <destination url>`
 5. **Report and continue** — On each update, send a compact status update in the format:
    - `tab #N: current = A, expected = B, do = C`.
 
-To close tabs automatically after a destination is recognized, append `--observe-close-on-destination` (optional and mostly useful when `--connect-chrome` is not used).
+To close tabs automatically after a destination is recognized, append `--observe-close-on-destination` (the skill uses this by default for session-launched flows).
 
 ## Destination expectations by URL type
 
@@ -67,7 +71,7 @@ To close tabs automatically after a destination is recognized, append `--observe
 - **Slack channel (`/archives/...`)**
   - **Expected:** channel message list with recent messages visible.
   - **Blockers to expect:** Slack desktop app capture, workspace sign-in, or channel not loaded.
-  - **Recommended action:** keep thread in Chrome and load the channel in browser; then reply **ready**.
+  - **Recommended action:** keep thread in a browser tab and load the channel in browser; then reply **ready**.
 - **Slack thread permalink (`/archives/.../p...`)**
   - **Expected:** parent message + replies visible in one thread context.
   - **Blockers to expect:** only channel view, collapsed thread, or missing context.
@@ -77,28 +81,29 @@ To close tabs automatically after a destination is recognized, append `--observe
 
 ## Read-only restriction
 
-**fetch.js only loads pages.** It navigates to each URL, waits for load, then extracts title, body text, and links. It does **not** click buttons, fill forms, or trigger navigation. Use this for **getting** page content only. If a site requires interaction to show content (e.g. “Open in browser”), the **user** does that in Chrome; then you run fetch on the resulting URL.
+**fetch.js only loads pages.** It navigates to each URL, waits for load, then extracts title, body text, and links. It does **not** click buttons, fill forms, or trigger navigation. Use this for **getting** page content only. If a site requires interaction to show content (e.g. “Open in browser”), the **user** does that in a browser tab; then you run fetch on the resulting URL.
 
 ---
 
-## Using the browser (already open)
+## Using the browser (inside context-add)
 
-fetch.js attaches to the existing Chrome via **`--connect-chrome`** (default localhost:9222). In **observer mode** it opens each input URL in a dedicated tab and emits updates as pages load and navigate. Use it to keep track of blockers while the user is fixing the view. It does not close Chrome and does not perform clicks on behalf of the user.
-If you run `fetch.js` without `--connect-chrome`, it starts a dedicated browser session and closes it once all provided links are done.
+`fetch.js` starts a dedicated browser session by default (shared profile), opens each input URL in a dedicated tab, and emits updates as pages load and navigate. It does not click or navigate on your behalf.
+When run without `--connect-chrome`, the session closes at the end of the command.
+If you choose to pass `--connect-chrome`, the command attaches to an existing session and does not close it.
 
 ---
 
 ## Interactivity: what to recommend (user does the clicks)
 
-The script is **read-only**; the **user** must perform clicks and navigation. Before or after fetch/observe, **recommend specific actions** so the right content is visible in Chrome. Keep recommendations focused on **relevant next actions** (not broad link chasing).
+The script is **read-only**; the **user** must perform clicks and navigation. Before or after fetch/observe, **recommend specific actions** so the right content is visible in the browser. Keep recommendations focused on **relevant next actions** (not broad link chasing).
 
 ### Login
 
-If a result shows a login page, or fetch fails with auth/redirect, recommend: *"Log in to [GitHub / Jira / Slack] in **this Chrome tab** (the one the script uses). When you're logged in and the target page is visible, say **ready** and I'll fetch again."*
+If a result shows a login page, or fetch fails with auth/redirect, recommend: *"Log in to [GitHub / Jira / Slack] in **this browser tab** (the one the script uses). When you're logged in and the target page is visible, say **ready** and I'll fetch again."*
 
 ### Slack: use the browser, not the app
 
-Slack must be open in **Chrome** (browser), not the Slack desktop app. Recommend: *"Open Slack in the **browser** (e.g. app.slack.com or your workspace URL). The fetch script attaches to Chrome and can only capture pages in that browser."* If the user shares a slack.com URL but has the app open, ask them to open the same link in Chrome.
+Slack must be open in a browser tab, not the Slack desktop app. Recommend: *"Open Slack in the **browser** (e.g. app.slack.com or your workspace URL). The fetch script attaches to the configured browser session and can only capture pages in that browser."* If the user shares a slack.com URL but has the app open, ask them to open the same link in the browser.
 
 ### Unwrap thread; nested thread
 
@@ -116,7 +121,7 @@ When recommending "next links", pick only **relevant** ones from the page or fro
 
 Script path: **`{{base:scripts/url}}`** (replaced at install with the actual repo path).
 
-- **fetch.js** — Flat list of URLs. Attaches to Chrome, **loads** each page (no interaction), extracts title, text, and **links**. **Retries** each URL on non-OK response (default 3 retries, 2s apart). **Always** use **`--links --links-limit 15`** so each result includes **`links.best`**.
+- **fetch.js** — Flat list of URLs. Starts (or attaches to) a browser session, **loads** each page (no interaction), extracts title, text, and **links**. **Retries** each URL on non-OK response (default 3 retries, 2s apart). **Always** use **`--links --links-limit 15`** so each result includes **`links.best`**.
 
 **Always use:** **`--visited-file .cursor/research-visited.txt`**, **`--failed-file .cursor/research-failed.txt`**, and **`--links --links-limit 15`**.
 
@@ -144,7 +149,7 @@ Use these labels to **evaluate** whether a fetched result contains what we expec
 | **GitHub Actions run** | "Run", "job", "Summary", "succeeded", "failed", "workflow" |
 | **Jira task** | "Key details", "Description", "Assignee", "browse", "TIS-", "Acceptance" |
 | **Slack channel** | "Messages", message list, user/display names, "Slack" in title |
-| **Slack thread** | Multiple message/reply bodies, "reply" or "replies", or clearly more than one message in the text (full discussion). If you only see one message and channel chrome, the thread pane is not open. |
+| **Slack thread** | Multiple message/reply bodies, "reply" or "replies", or clearly more than one message in the text (full discussion). If you only see one message and channel browser tab, the thread pane is not open. |
 
 If the page is a **Slack** URL and the result has empty or very short text, or "Execution context was destroyed", the page may have navigated or not finished loading. Use **`--wait-after-load 5000`** and ask the user to open the right view first (see **Slack: thread vs channel** below).
 
@@ -237,11 +242,16 @@ After each fetch run:
 
 ## Commands (from workspace root)
 
-`mkdir -p .cursor`. Chrome must already be open via **@browser-open**; use **`--connect-chrome`** for fetch.
+`mkdir -p .cursor`. The command below launches a browser session automatically and closes it on completion.
 
 **Monitor destination readiness and append when done:**
 ```bash
-node {{base:scripts/url}}/fetch.js --connect-chrome --observe --observe-ms 0 --observe-interval 2000 --links --links-limit 15 --wait-after-load 3000 --visited-file .cursor/research-visited.txt --failed-file .cursor/research-failed.txt --retries 3 --compact URL
+node {{base:scripts/url}}/fetch.js --observe --observe-ms 0 --observe-interval 2000 --observe-max-ms 600000 --links --links-limit 15 --wait-after-load 3000 --visited-file .cursor/research-visited.txt --failed-file .cursor/research-failed.txt --retries 3 --observe-close-on-destination --compact URL
+```
+Use a different browser family when needed:
+```bash
+BROWSER_CHANNEL=chromium node {{base:scripts/url}}/fetch.js --observe --observe-ms 0 --observe-close-on-destination --compact URL
+node {{base:scripts/url}}/fetch.js --browser-channel firefox --observe --observe-ms 0 --observe-close-on-destination --compact URL
 ```
 For Slack URLs use **`--wait-after-load 5000`**.  
 Use **`--observe`** when blockers are likely (login, permissions, wrong view).
@@ -261,7 +271,7 @@ node {{base:scripts/context}}/write-readable.js
 
 ## On invoke
 
-1. Ensure Chrome is open with the shared profile (if not, direct the user to **@browser-open**).
+1. Start a fresh browser session via the fetch command above (it uses the shared profile automatically).
 2. **Normalize URLs:** GitHub — use as-is. Jira — browser URL (atlassian.net). Slack — **browser URL only** (not the desktop app). For **Slack thread**: user must open the thread (View thread / replies) so full discussion is visible; say **ready** when ready.
 3. For each URL, run fetch in observer mode for a conversational window (`--observe` + `--observe-ms`, usually `0`) and classify the current snapshot using destination expectations.
    - If blocked (SSO/login/app mismatch/thread not opened), report blocker and ask for user action.

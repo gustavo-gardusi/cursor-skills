@@ -27,7 +27,7 @@ description: >-
     - **Add / change:** what to add or change and at which file path(s).
     - **Update / wire:** what to update or wire and at which file path(s).
 
-Parse each **`### Chunk`** and apply the three bullet types in order. Respect any explicit order or dependencies stated in the plan.
+Parse each **`### Chunk`** and apply the three bullet types in order. Respect any explicit order or dependencies stated in the plan. If the plan is malformed (missing `### Chunk`, missing `Add / change` and `Update / wire` targets, or impossible commands), stop and ask for a corrected plan instead of inventing edits.
 
 ---
 

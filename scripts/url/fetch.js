@@ -22,16 +22,20 @@
  *   --links-limit <n>       Max "best" links per page (default: 50)
  *   --links-same-site       Keep only same-site links in "best" (default: true when --links)
  *   --observe               Open each input URL in its own tab and stream page-change snapshots (good for manual login/SSO/manual interaction).
- *   --observe-ms <ms>       How long to keep observer tabs open (default: 120000). If 0, it stays open until you stop the script.
+ *   --observe-ms <ms>       How long to keep observer tabs open (default: 120000).
+ *                          If 0, it keeps running unless --observe-close-on-destination is set.
  *   --observe-interval <ms>  Poll for updates and emit periodic snapshots (default: 2000).
  *   --observe-text-limit <n> Max text size in monitor snapshots (default: 1600).
  *   --observe-close-on-destination Close tab automatically when destination signal is detected for that URL.
+ *   --observe-max-ms <ms> Maximum runtime when `--observe-ms 0` is set. Defaults to 600000 (10m). Set to 0 for no hard limit.
  *   --observe-match-threshold <n> Number of destination signals that must match before tab is considered done (default: 1).
  *   --visited-file <path>   Load/save visited URLs (one per line); skip already visited, append and write at end
  *   --wait-after-load <ms>  After load event, wait this many ms before extracting (default: 0; use 3000 for SPAs). Should be > delay-between-pages.
  *   --delay-between-pages <ms>  Wait this many ms between each page (default: 0). Use 0 when using --confirm-each-page.
  *   --confirm-each-page    Prompt "Proceed to next page? (y/n)" before each page; uses 3000 ms wait-after-load if not set.
  *   --retries <n>          Retry each URL up to n times on non-OK response (404, 5xx); default 3.
+ *   --browser-channel <name>  Browser channel for launched sessions when --connect-chrome is not used.
+ *                           Supported values: chrome, chromium, firefox. Defaults to chrome.
  *   --failed-file <path>   Write URLs that still failed after retries (one per line); e.g. .cursor/research-failed.txt. Do not add them to visited so user can log in and re-run.
  */
 
@@ -48,6 +52,28 @@ import { argv } from 'process';
 const CDP_URL = 'http://localhost:9222';
 const CHROME_DEBUG_PROFILE = join(homedir(), '.chrome-debug-profile');
 const RETRY_DELAY_MS = 2000;
+const DEFAULT_BROWSER_CHANNEL = process.env.BROWSER_CHANNEL || 'chrome';
+const VALID_BROWSER_CHANNELS = new Set(['chrome', 'chromium', 'firefox']);
+
+function emitArgWarning(message) {
+  if (typeof process.emitWarning === 'function') {
+    process.emitWarning(message, {
+      code: 'CURSOR_SCRIPT_WARNING',
+      type: 'FetchArgWarning',
+    });
+  }
+}
+
+function parseIntegerArg(rawValue, fallback, opts = {}) {
+  const { allowZero = false, name = 'value', min = 1 } = opts;
+  const parsed = parseInt(rawValue, 10);
+  const effectiveMin = allowZero ? 0 : min;
+  if (!Number.isFinite(parsed) || parsed < effectiveMin) {
+    emitArgWarning(`Invalid value for ${name}: "${rawValue}". Falling back to ${fallback}.`);
+    return fallback;
+  }
+  return parsed;
+}
 
 export function isValidUrl(s) {
   if (typeof s !== 'string' || !s) return false;
@@ -209,10 +235,12 @@ export function parseArgs(args = argv.slice(2)) {
     failedFile: null,
     observe: false,
     observeMs: 120000,
+  observeMaxMs: 600000,
     observeInterval: 2000,
     observeTextLimit: 1600,
     observeCloseOnDestination: false,
     observeMatchThreshold: 1,
+    browserChannel: DEFAULT_BROWSER_CHANNEL,
   };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -232,7 +260,7 @@ export function parseArgs(args = argv.slice(2)) {
         opts.selector = args[++i];
         break;
       case '--timeout':
-        opts.timeout = parseInt(args[++i], 10) || 30_000;
+        opts.timeout = parseIntegerArg(args[++i], 30_000, { name: '--timeout', min: 1 });
         break;
       case '--out':
         opts.out = args[++i];
@@ -247,7 +275,7 @@ export function parseArgs(args = argv.slice(2)) {
         opts.links = true;
         break;
       case '--links-limit':
-        opts.linksLimit = parseInt(args[++i], 10) || 50;
+        opts.linksLimit = parseIntegerArg(args[++i], 50, { name: '--links-limit', min: 1 });
         break;
       case '--links-same-site':
         opts.linksSameSite = true;
@@ -263,34 +291,48 @@ export function parseArgs(args = argv.slice(2)) {
         }
         break;
       case '--observe-ms':
-        opts.observeMs = parseInt(args[++i], 10) || 120000;
+        {
+          const rawObserveMs = parseInt(args[++i], 10);
+          if (Number.isFinite(rawObserveMs)) {
+            opts.observeMs = rawObserveMs;
+            break;
+          }
+          emitArgWarning(`Invalid value for --observe-ms: "${rawObserveMs}". Falling back to 120000.`);
+          opts.observeMs = 120000;
+        }
         break;
       case '--observe-interval':
-        opts.observeInterval = parseInt(args[++i], 10) || 2000;
+        opts.observeInterval = parseIntegerArg(args[++i], 2000, { name: '--observe-interval', min: 1 });
         break;
       case '--observe-text-limit':
-        opts.observeTextLimit = parseInt(args[++i], 10) || 1600;
+        opts.observeTextLimit = parseIntegerArg(args[++i], 1600, { name: '--observe-text-limit', min: 1 });
         break;
       case '--observe-close-on-destination':
         opts.observeCloseOnDestination = true;
         break;
+      case '--observe-max-ms':
+        opts.observeMaxMs = parseIntegerArg(args[++i], 600000, { allowZero: true, name: '--observe-max-ms' });
+        break;
       case '--observe-match-threshold':
-        opts.observeMatchThreshold = parseInt(args[++i], 10) || 1;
+        opts.observeMatchThreshold = parseIntegerArg(args[++i], 1, { name: '--observe-match-threshold', min: 1 });
+        break;
+      case '--browser-channel':
+        opts.browserChannel = args[++i] || DEFAULT_BROWSER_CHANNEL;
         break;
       case '--visited-file':
         opts.visitedFile = args[++i];
         break;
       case '--wait-after-load':
-        opts.waitAfterLoad = parseInt(args[++i], 10) || 0;
+        opts.waitAfterLoad = parseIntegerArg(args[++i], 0, { allowZero: true, name: '--wait-after-load' });
         break;
       case '--delay-between-pages':
-        opts.delayBetweenPages = parseInt(args[++i], 10) || 0;
+        opts.delayBetweenPages = parseIntegerArg(args[++i], 0, { allowZero: true, name: '--delay-between-pages' });
         break;
       case '--confirm-each-page':
         opts.confirmEachPage = true;
         break;
       case '--retries':
-        opts.retries = Math.max(0, parseInt(args[++i], 10) ?? 3);
+        opts.retries = parseIntegerArg(args[++i], 3, { allowZero: true, name: '--retries' });
         break;
       case '--failed-file':
         opts.failedFile = args[++i];
@@ -306,7 +348,17 @@ export function parseArgs(args = argv.slice(2)) {
   if (opts.confirmEachPage && opts.waitAfterLoad === 0) {
     opts.waitAfterLoad = 3000;
   }
+  if (!opts.browserChannel) {
+    opts.browserChannel = DEFAULT_BROWSER_CHANNEL;
+  } else if (!VALID_BROWSER_CHANNELS.has(opts.browserChannel)) {
+    emitArgWarning(`Unsupported browser channel "${opts.browserChannel}". Falling back to "${DEFAULT_BROWSER_CHANNEL}".`);
+    opts.browserChannel = DEFAULT_BROWSER_CHANNEL;
+  }
   return opts;
+}
+
+function getBrowserChannel(opts) {
+  return (opts && opts.browserChannel) || DEFAULT_BROWSER_CHANNEL;
 }
 
 function getVisitedSet(opts, deps) {
@@ -354,9 +406,10 @@ export async function fetchUrl(page, url, opts) {
 async function runObserveMode(opts, deps = {}) {
   const timeout = opts.timeout || 30_000;
   const waitUntil = opts.waitUntil || 'load';
+  const writeFile = deps.writeFileSync ?? writeFileSync;
   const write = deps.writeOutput ?? ((str, path) => {
     if (path) {
-      writeFileSync(path, str);
+      writeFile(path, str);
     } else {
       console.log(str);
     }
@@ -364,20 +417,26 @@ async function runObserveMode(opts, deps = {}) {
 
   let browser;
   let context;
+  const chromiumClient = deps.chromium || chromium;
   if (deps.getBrowser) {
     browser = await deps.getBrowser();
     const ctx = browser.contexts?.()?.[0] || (await browser.newContext?.());
     context = ctx;
   } else if (opts.connectChrome) {
     const cdp = opts.cdpUrl || CDP_URL;
-    browser = await chromium.connectOverCDP(cdp);
+    browser = await chromiumClient.connectOverCDP(cdp);
     context = browser.contexts()[0] || await browser.newContext();
   } else {
-    browser = await chromium.launchPersistentContext(CHROME_DEBUG_PROFILE, { channel: 'chrome', headless: false });
+    const channel = getBrowserChannel(opts);
+    browser = await chromiumClient.launchPersistentContext(CHROME_DEBUG_PROFILE, {
+      channel,
+      headless: false,
+    });
     context = browser;
   }
 
   const durationMs = opts.observeMs ?? 120000;
+  const maxObserveMs = Number.isFinite(opts.observeMaxMs) ? opts.observeMaxMs : 600000;
   const pollMs = opts.observeInterval || 2000;
   const observed = [];
   const seen = new Map();
@@ -400,9 +459,13 @@ async function runObserveMode(opts, deps = {}) {
     }
   };
 
-  const maybeCloseTab = async (tabIndex, page, done) => {
+  const maybeCloseTab = async (tabIndex, page, originalUrl, done) => {
     if (!done || doneTabs.has(tabIndex)) return;
     doneTabs.add(tabIndex);
+    if (visited) {
+      const normalized = normalizeVisitedUrl(originalUrl);
+      if (normalized) visited.add(normalized);
+    }
     if (!opts.observeCloseOnDestination) return;
     try {
       await page.close?.();
@@ -421,7 +484,7 @@ async function runObserveMode(opts, deps = {}) {
         const entry = await capturePageSnapshot(page, tabIndex, originalUrl, opts);
         const isDestination = isDestinationReached(entry, originalUrl, threshold);
         if (isDestination) {
-          void maybeCloseTab(tabIndex, page, true);
+          void maybeCloseTab(tabIndex, page, originalUrl, true);
         }
         emit(entry);
       } finally {
@@ -463,6 +526,10 @@ async function runObserveMode(opts, deps = {}) {
         if (opts.waitAfterLoad > 0) await delay(opts.waitAfterLoad);
         const snap = await capturePageSnapshot(page, i, originalUrl, opts);
         emit(snap);
+        const isDestination = isDestinationReached(snap, originalUrl, threshold);
+        if (isDestination) {
+          void maybeCloseTab(i, page, originalUrl, true);
+        }
       } catch (err) {
         emit({
           tab: i + 1,
@@ -478,7 +545,15 @@ async function runObserveMode(opts, deps = {}) {
     }
 
     if (durationMs === 0) {
-      await new Promise(() => {});
+      if (opts.observeCloseOnDestination) {
+        const start = Date.now();
+        while (doneTabs.size < pages.length && pages.length > 0) {
+          if (maxObserveMs > 0 && Date.now() - start >= maxObserveMs) break;
+          await delay(pollMs);
+        }
+      } else {
+        await new Promise(() => {});
+      }
     }
     if (durationMs > 0) {
       await delay(durationMs);
@@ -494,6 +569,11 @@ async function runObserveMode(opts, deps = {}) {
       }
     }
     if (browser && !opts.connectChrome) await browser.close();
+  }
+
+  if (visited && opts.visitedFile) {
+    const write = deps.writeFileSync ?? writeFileSync;
+    saveVisitedSet(opts.visitedFile, visited, { writeFileSync: write });
   }
 
   const out = {
@@ -529,18 +609,23 @@ export async function run(opts, deps = {}) {
 
   let browser;
   let page;
+  const chromiumClient = deps.chromium || chromium;
   if (deps.getBrowser) {
     browser = await deps.getBrowser();
     const context = browser.contexts?.()?.[0] || (await browser.newContext?.());
     page = await (context.newPage?.() ?? context);
   } else if (opts.connectChrome) {
     const cdp = opts.cdpUrl || CDP_URL;
-    browser = await chromium.connectOverCDP(cdp);
+    browser = await chromiumClient.connectOverCDP(cdp);
     const context = browser.contexts()[0] || await browser.newContext();
     // Use the tab the user already sees so the browser opens on the target page and stays there
     page = context.pages()[0] || await context.newPage();
   } else {
-    browser = await chromium.launchPersistentContext(CHROME_DEBUG_PROFILE, { channel: 'chrome', headless: false });
+    const channel = getBrowserChannel(opts);
+    browser = await chromiumClient.launchPersistentContext(CHROME_DEBUG_PROFILE, {
+      channel,
+      headless: false,
+    });
     page = browser.pages()[0] || await browser.newPage();
   }
 

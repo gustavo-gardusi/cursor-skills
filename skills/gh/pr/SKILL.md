@@ -8,9 +8,9 @@ description: >-
 
 # PR
 
-**Sole purpose:** Create or update the pull request from the current branch to **main** (same repo) or **upstream** (fork). Check whether a PR already exists; summarize changes vs the base branch; write a strong description (emoji, tables, nested path lists, bold, memory/CPU); then create or update the PR. Does not add, commit, or push; does not sync or build—do those separately or with **gh-pull** / **gh-pr-review**.
+**Sole purpose:** Create or update the pull request from the current branch to **main** (same repo) or **upstream** (fork). Check whether a PR already exists; summarize changes vs the base branch; write a strong description (emoji, tables, nested path lists, bold, memory/CPU); then create or update the PR. Does not add, commit, or push; do sync with **gh-pull**, and run/build checks with **gh-push** before final PR confirmation.
 
-**Target:** Same repo → base `main`, head = current branch. Fork → base `upstream/main`, head = `FORK_OWNER:$BRANCH`. On main with no upstream → there is no PR to create; stop.
+**Target:** Same repo → base `main`, head = current branch. Fork → base `upstream/main`, head = `FORK_OWNER:$BRANCH` where `FORK_OWNER` is the owner from `origin`. On main with no upstream → there is no PR to create; stop.
 
 ## On invoke
 
@@ -22,11 +22,11 @@ Start immediately. Run commands one by one. Do not summarize. **First** determin
 
 2. **Branch & base** — `BRANCH=$(git branch --show-current)`. If `BRANCH` is `main` and same-repo (no upstream): there is no PR to create for “main → main”; stop. If fork: **head** = `$FORK_OWNER:$BRANCH` (or `$FORK_OWNER:main` when on main). If same-repo: **head** = `$BRANCH`.
 
-3. **Check existing PR** — **Same repo:** `gh pr list --head $BRANCH --base main`. **Fork:** `gh pr list --repo $UPSTREAM --head $FORK_OWNER:$BRANCH` (or `$FORK_OWNER:main` when on main). Determine if a PR already exists; note its number (and URL if useful).
+3. **Check existing PR** — **Same repo:** `gh pr list --head $BRANCH --base main`. **Fork:** `gh pr list --repo $UPSTREAM --base main --head $FORK_OWNER:$BRANCH` (or `$FORK_OWNER:main` when on main). Determine if a PR already exists; note its number (and URL if useful).
 
 4. **Summarize changes vs base** — Run `git diff base...HEAD --name-status`. Group output by **Added**, **Modified**, **Deleted**. Use this to build the PR description (see below).
 
-5. **Create or update PR** — If a PR exists: `gh pr edit <number>` (same repo) or `gh pr edit <number> --repo $UPSTREAM` (fork) with `--title "..."` and `--body "..."`. If not: `gh pr create --base main --head $BRANCH` (same repo) or `gh pr create --repo $UPSTREAM --base main --head $FORK_OWNER:$BRANCH` (or `$FORK_OWNER:main` on main) with `--title "..."` and `--body "..."`. Use the description format below for the body. Title: one line, no emojis.
+5. **Create or update PR** — If a PR exists: `gh pr edit <number>` (same repo) or `gh pr edit <number> --repo $UPSTREAM` (fork) with `--title "..."` and `--body "..."`. If not: `gh pr create` with `--base main --head "$BRANCH"` (same repo) or `--repo $UPSTREAM --base main --head "$FORK_OWNER:$BRANCH"` (or `$FORK_OWNER:main` on main). Use the description format below for the body. Title: one line, no emojis.
 
 ---
 
@@ -67,4 +67,4 @@ Use the diff from step 3 (`base...HEAD`, `--name-status`). Write a **strong desc
 - Prerequisites: `gh` CLI, `gh auth status`.
 - **Fork detection first:** If this repo is a fork, it **must** have an `upstream` remote pointing at the original repo. Without it, the skill cannot target the right repo. Add with: `git remote add upstream https://github.com/ORIGINAL_OWNER/REPO.git`.
 - **Branch must be pushed** for the PR to exist or to update the correct branch. Push first (e.g. with **gh-pull** or manually) if needed.
-- This skill does not add, commit, push, sync, or build. Use **gh-pull** to sync with main/upstream and get tests passing; use **gh-pr-review** to address comments and failed checks.
+- This skill does not add, commit, push, sync, or build. Use **gh-pull** to sync with main/upstream and get tests passing; use **gh-pr** to handle PR review and response workflows.

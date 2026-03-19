@@ -146,6 +146,11 @@ So **fetch** (with `--links`) puts all raw links in `links.all` and the filtered
 
 **Default:** Run the script without `--connect-chrome`. The script launches Chrome with the debug profile (`~/.chrome-debug-profile`), fetches, appends results to your `--out` / `--visited-file`, then closes Chrome. No separate launcher or manual Chrome step.
 
+To use a different browser binary/icon while keeping the same profile, set `--browser-channel chromium|chrome|firefox` (or `BROWSER_CHANNEL=...`). Example:
+```bash
+BROWSER_CHANNEL=chromium node scripts/url/fetch.js --out pages.json --compact URL
+```
+
 **Optional — log in once:** To use a logged-in profile (e.g. GitHub, internal docs), create the profile once: start Chrome with that user-data dir, log in, then close. After that, when the script launches Chrome with the same profile, you stay logged in.
    ```bash
    # One-time: create profile and log in (macOS)
@@ -165,8 +170,8 @@ node scripts/url/fetch.js --connect-chrome --links --links-limit 15 --out pages.
 ```
 
 ```bash
-# Monitor blocker states (login/SSO/permission prompts) while staying attached to the same tabs
-node scripts/url/fetch.js --connect-chrome --observe --observe-ms 0 --observe-interval 2000 URL1 [URL2 ...]
+# Monitor blocker states (login/SSO/permission prompts) while staying attached to dedicated tabs
+node scripts/url/fetch.js --observe --observe-close-on-destination --observe-ms 0 --observe-max-ms 600000 --observe-interval 2000 URL1 [URL2 ...]
 
 # Optional: keep long-running observer and auto-close destination tabs for this session
 node scripts/url/fetch.js --observe --observe-ms 120000 --observe-close-on-destination --observe-match-threshold 2 URL1 [URL2 ...]
@@ -215,7 +220,7 @@ node scripts/url/fetch.js --connect-chrome --out out.json --append https://c.com
 
 | Script         | Main options |
 |----------------|---------------|
-| **fetch.js**   | `--connect-chrome [url]`, `--urls-file <path>`, `--out <path>`, `--compact`, `--append`, `--visited-file <path>`, `--failed-file <path>`, `--retries <n>`, `--wait-until`, `--wait-after-load <ms>`, `--delay-between-pages <ms>`, `--confirm-each-page`, `--selector`, `--timeout`, `--links`, `--links-limit`, `--links-same-site` / `--no-links-same-site`, `--observe`, `--observe-ms`, `--observe-interval`, `--observe-text-limit`, `--observe-close-on-destination`, `--observe-match-threshold`. |
+| **fetch.js**   | `--connect-chrome [url]`, `--browser-channel <chrome|chromium|firefox>`, `--urls-file <path>`, `--out <path>`, `--compact`, `--append`, `--visited-file <path>`, `--failed-file <path>`, `--retries <n>`, `--wait-until`, `--wait-after-load <ms>`, `--delay-between-pages <ms>`, `--confirm-each-page`, `--selector`, `--timeout`, `--links`, `--links-limit`, `--links-same-site` / `--no-links-same-site`, `--observe`, `--observe-ms`, `--observe-max-ms`, `--observe-interval`, `--observe-text-limit`, `--observe-close-on-destination`, `--observe-match-threshold`. |
 | **interactive.js** | `<start-url>`, `--top <n>`, `--iterations <n>`, `--out <path>`, `--compact`, `--visited-file <path>`, `--connect-chrome [url]`, `--timeout`. |
 
 Used by the **context-add** (research) skill.

@@ -165,6 +165,52 @@ describe('fetch parseArgs', () => {
     assert.strictEqual(opts.retries, 5);
     assert.strictEqual(opts.failedFile, '/f.txt');
   });
+
+  test('parses --observe-max-ms with observe mode', () => {
+    const opts = parseArgs(['--observe', '--observe-ms', '0', '--observe-max-ms', '1500', 'https://x.com']);
+    assert.strictEqual(opts.observe, true);
+    assert.strictEqual(opts.observeMs, 0);
+    assert.strictEqual(opts.observeMaxMs, 1500);
+  });
+
+  test('warns and falls back on invalid numeric values', () => {
+    const originalWarning = process.emitWarning;
+    const warnings = [];
+    process.emitWarning = (warning) => warnings.push(typeof warning === 'string' ? warning : warning.message);
+    try {
+      const opts = parseArgs([
+        '--timeout', 'abc',
+        '--links-limit', '0',
+        '--observe-ms', 'x',
+        '--observe-max-ms', '-1',
+        '--retries', '-2',
+        '--observe-match-threshold', '0',
+        'https://x.com',
+      ]);
+      assert.strictEqual(opts.timeout, 30_000);
+      assert.strictEqual(opts.linksLimit, 50);
+      assert.strictEqual(opts.observeMs, 120_000);
+      assert.strictEqual(opts.observeMaxMs, 600_000);
+      assert.strictEqual(opts.retries, 3);
+      assert.strictEqual(opts.observeMatchThreshold, 1);
+      assert.ok(warnings.length >= 5);
+    } finally {
+      process.emitWarning = originalWarning;
+    }
+  });
+
+  test('warns and falls back on unsupported browser channel', () => {
+    const originalWarning = process.emitWarning;
+    const warnings = [];
+    process.emitWarning = (warning) => warnings.push(typeof warning === 'string' ? warning : warning.message);
+    try {
+      const opts = parseArgs(['--browser-channel', 'opera', 'https://x.com']);
+      assert.strictEqual(opts.browserChannel, 'chrome');
+      assert.ok(warnings.some((message) => message.includes('Unsupported browser channel "opera"')));
+    } finally {
+      process.emitWarning = originalWarning;
+    }
+  });
 });
 
 describe('fetch fetchUrl', () => {
@@ -644,6 +690,256 @@ describe('fetch run (regression)', () => {
     const lines = written['/v.txt'].trim().split('\n').sort();
     assert.ok(lines.some((u) => u.startsWith('https://already.com')), 'visited file should contain already.com');
     assert.ok(lines.some((u) => u.startsWith('https://new.com')), 'visited file should contain new.com');
+  });
+
+  test('run observe mode exits after observe-max-ms even without destination', async () => {
+    const mockPage = {
+      goto: () => Promise.resolve({ ok: () => true }),
+      title: () => Promise.resolve('Waiting for login'),
+      $: () => Promise.resolve({ innerText: () => Promise.resolve('') }),
+      on: () => {},
+      close: () => Promise.resolve(),
+      url: () => 'https://example.com/pull/1',
+    };
+    const mockContext = { newPage: async () => mockPage };
+    const mockBrowser = {
+      contexts: () => [mockContext],
+      close: async () => {},
+    };
+    const start = Date.now();
+    const opts = parseArgs([
+      '--observe',
+      '--observe-ms',
+      '0',
+      '--observe-close-on-destination',
+      '--observe-max-ms',
+      '20',
+      '--observe-interval',
+      '5',
+      'https://example.com/pull/1',
+    ]);
+    const out = await run(opts, { getBrowser: async () => mockBrowser });
+    assert.strictEqual(out.tabs, 1);
+    assert.strictEqual(out.tabsDone, 0);
+    assert.ok(Date.now() - start < 200, 'observe mode should stop on max duration');
+  });
+
+  test('run observe mode writes visited file when destination is reached', async () => {
+    const visitedPath = '/tmp/research-visited.txt';
+    const written = {};
+    const mockPage = {
+      goto: () => Promise.resolve({ ok: () => true }),
+      title: () => Promise.resolve('PR conversation'),
+      $: () => Promise.resolve({ innerText: () => Promise.resolve('This conversation has details and review comments') }),
+      on: () => {},
+      close: () => Promise.resolve(),
+      url: () => 'https://example.com/pull/123',
+    };
+    const mockContext = { newPage: async () => mockPage };
+    const mockBrowser = {
+      contexts: () => [mockContext],
+      close: async () => {},
+    };
+    const opts = parseArgs([
+      '--observe',
+      '--observe-ms',
+      '0',
+      '--observe-close-on-destination',
+      '--observe-max-ms',
+      '200',
+      '--observe-interval',
+      '5',
+      '--visited-file',
+      visitedPath,
+      'https://example.com/pull/123',
+    ]);
+    const out = await run(opts, {
+      getBrowser: async () => mockBrowser,
+      existsSync: () => false,
+      writeFileSync: (p, d) => {
+        written[p] = d;
+      },
+    });
+    assert.strictEqual(out.tabsDone, 1);
+    assert.ok(visitedPath in written, 'visited set should be persisted for observe mode');
+    const lines = written[visitedPath].split('\n').map((line) => line.trim()).filter(Boolean);
+    assert.ok(lines.includes('https://example.com/pull/123'));
+  });
+
+  test('run observe mode skips URLs already in visited set', async () => {
+    const visitedPath = '/tmp/visit-skip.txt';
+    const written = {};
+    const opts = parseArgs([
+      '--observe',
+      '--observe-ms', '20',
+      '--visited-file',
+      visitedPath,
+      'https://example.com/pull/9',
+    ]);
+    const out = await run(opts, {
+      getBrowser: async () => ({
+        contexts: () => [{ newPage: async () => {
+          throw new Error('should not create page when visited');
+        } }],
+        close: async () => {},
+      }),
+      existsSync: () => true,
+      readFileSync: (path) => (path === visitedPath ? 'https://example.com/pull/9\n' : ''),
+      writeFileSync: (path, data) => {
+        written[path] = data;
+      },
+    });
+    assert.strictEqual(out.tabs, 0);
+    assert.strictEqual(out.tabsDone, 0);
+    assert.strictEqual(out.events[0].event, 'skipped');
+    assert.strictEqual(written[visitedPath], 'https://example.com/pull/9\n');
+  });
+
+  test('run observe mode emits default output when --out is set and no writeOutput callback', async () => {
+    const outPath = '/tmp/observe-output.json';
+    const written = {};
+    const mockPage = {
+      goto: () => Promise.resolve({ ok: () => true }),
+      title: () => Promise.resolve('Observed page'),
+      $: () => Promise.resolve({ innerText: () => Promise.resolve('No destination signal') }),
+      on: () => {},
+      close: () => Promise.resolve(),
+      url: () => 'https://example.com/docs/11',
+    };
+    const mockContext = { newPage: async () => mockPage };
+    const mockBrowser = {
+      contexts: () => [mockContext],
+      close: async () => {},
+    };
+    const opts = parseArgs(['--observe', '--observe-ms', '20', '--out', outPath, 'https://example.com/docs/11']);
+    const out = await run(opts, {
+      getBrowser: async () => mockBrowser,
+      writeFileSync: (path, data) => {
+        written[path] = data;
+      },
+    });
+    assert.ok(outPath in written);
+    assert.strictEqual(out.tabs, 1);
+    const payload = JSON.parse(written[outPath]);
+    assert.strictEqual(payload.tabs, 1);
+    assert.strictEqual(payload.tabsDone, 0);
+  });
+
+  test('run observe mode marks done from event-driven destination detection', async () => {
+    let textCall = 0;
+    const events = [];
+    const mockPage = {
+      goto: () => Promise.resolve({ ok: () => true }),
+      title: () => Promise.resolve(textCall === 0 ? 'Monitor page' : 'Run page'),
+      $: () =>
+        Promise.resolve({
+          innerText: () => {
+            textCall += 1;
+            return Promise.resolve(
+              textCall === 1 ? 'Checking status' : 'Execution run checks passed'
+            );
+          },
+        }),
+      on: (name, handler) => {
+        events.push(name);
+        setTimeout(() => handler(), 10);
+      },
+      close: () => Promise.resolve(),
+      url: () => 'https://example.com/actions/runs/22',
+    };
+    const mockContext = { newPage: async () => mockPage };
+    const mockBrowser = {
+      contexts: () => [mockContext],
+      close: async () => {},
+    };
+    const opts = parseArgs([
+      '--observe',
+      '--observe-ms',
+      '0',
+      '--observe-close-on-destination',
+      '--observe-max-ms',
+      '200',
+      '--observe-interval',
+      '5',
+      'https://example.com/actions/runs/22',
+    ]);
+    const out = await run(opts, { getBrowser: async () => mockBrowser });
+    assert.ok(events.includes('load') || events.includes('framenavigated'));
+    assert.ok(textCall >= 2, 'event-triggered snapshot should run');
+    assert.strictEqual(out.tabs, 1);
+    assert.strictEqual(out.tabsDone, 1);
+  });
+
+  test('run observe mode still returns when final close fails', async () => {
+    const outPath = '/tmp/observe-close-failed.json';
+    const written = {};
+    const mockPage = {
+      goto: () => Promise.resolve({ ok: () => true }),
+      title: () => Promise.resolve('No destination'),
+      $: () => Promise.resolve({ innerText: () => Promise.resolve('Some waiting page') }),
+      on: () => {},
+      close: () => Promise.reject(new Error('close failed')),
+      url: () => 'https://example.com/page',
+    };
+    const mockContext = { newPage: async () => mockPage };
+    const opts = parseArgs([
+      '--observe',
+      '--observe-ms', '20',
+      '--observe-interval', '5',
+      '--out', outPath,
+      'https://example.com/page',
+    ]);
+    const out = await run(opts, {
+      getBrowser: async () => ({ contexts: () => [mockContext], close: async () => {} }),
+      writeFileSync: (path, data) => {
+        written[path] = data;
+      },
+    });
+    assert.strictEqual(out.tabs, 1);
+    assert.ok(written[outPath]);
+  });
+
+  test('run observe with injected launcher (no getBrowser) uses console emission path', async () => {
+    const logs = [];
+    const originalLog = console.log;
+    console.log = (...args) => logs.push(args.join(' '));
+    try {
+      const visitedPath = '/tmp/injected-visit.txt';
+      const written = {};
+      const mockPage = {
+        goto: () => Promise.resolve({ ok: () => true }),
+        title: () => Promise.resolve('PR review complete'),
+        $: () => Promise.resolve({ innerText: () => Promise.resolve('Conversation and review complete') }),
+        on: () => {},
+        close: () => Promise.resolve(),
+        url: () => 'https://example.com/pull/88',
+      };
+      const mockLauncher = {
+        launchPersistentContext: async () => ({
+          newPage: async () => mockPage,
+          close: async () => {},
+        }),
+      };
+      const opts = parseArgs([
+        '--observe',
+        '--observe-ms', '20',
+        '--observe-close-on-destination',
+        '--visited-file', visitedPath,
+        'https://example.com/pull/88',
+      ]);
+      const out = await run(opts, {
+        chromium: mockLauncher,
+        existsSync: () => false,
+        writeFileSync: (path, data) => {
+          written[path] = data;
+        },
+      });
+      assert.strictEqual(out.tabs, 1);
+      assert.ok(logs.length > 0, 'console emission should be used without getBrowser');
+      assert.strictEqual(written[visitedPath], 'https://example.com/pull/88\n');
+    } finally {
+      console.log = originalLog;
+    }
   });
 
   test('run retries on non-OK response and writes failed URLs to --failed-file', async () => {

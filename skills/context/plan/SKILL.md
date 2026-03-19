@@ -22,7 +22,10 @@ description: >-
 Before writing the plan, **establish scope** so the plan stays minimal and avoids high-impact changes to main:
 
 1. **Current branch** — `git branch --show-current`. If the user is on a feature branch (e.g. for a PR), all edits in the plan should apply to **this branch**, not main.
-2. **Diff vs main** — Run **`git diff main...HEAD --name-only`** (or `git diff upstream/main...HEAD --name-only` for forks). These files are “in scope”: the task (e.g. PR review, feature) already changed them. Prefer planning edits **only in these files** and, within them, **only in the regions that differ from main** (e.g. `git diff main...HEAD -- path`). This keeps the plan focused and avoids touching stable code on main.
+2. **Diff vs base** — Determine base with fork-awareness:
+   - Same-repo branch: **`git diff main...HEAD --name-only`**
+   - Forked branch: **`git diff upstream/main...HEAD --name-only`** (when upstream/main exists)
+   These files are “in scope”: the task (e.g. PR review, feature) already changed them. Prefer planning edits **only in these files** and, within them, **only in the regions that differ from base** (e.g. `git diff <base>...HEAD -- path`). This keeps the plan focused and avoids touching stable code from base.
 3. **What the context applies to** — Map the context (requirements, comments, failures) to specific files and lines. If the context mentions “build_metadata_keywords”, find that in the repo and note the path; only plan changes there. Do not broaden the scope (e.g. “refactor the whole module”) unless the context explicitly requires it.
 4. **Avoid impactful changes to main** — The plan must **not** instruct edits that would unnecessarily alter code that is identical to main or that is outside the diff. Prefer: add/change only what is **needed** to satisfy the context (e.g. address a comment, fix a test). No “while we’re here” refactors or style-only changes to unchanged lines.
 
@@ -54,7 +57,7 @@ Use the **summary** of the context: themes, requirements, APIs, constraints from
 1. **Resolve PR and base** — PR from user (URL or number). Base: `upstream/main` if fork, else `main`. `gh pr view <PR> --json baseRefName,headRefName,number,title,body,url,comments,reviews`.
 2. **Gather comments** — Top-level comments (`comments`), review bodies (`reviews`), inline comments (`gh api repos/OWNER/REPO/pulls/NUMBER/comments`). Plus any pasted content or failed-check logs. One list: section, author, body. **All comments must be addressed** in the plan (each appears as a chunk or a "Reply to reviewer" note).
 3. **Code checks** — Run **`gh pr checks <PR>`** or use **`gh pr view <PR> --json statusCheckRollup`**. List all failed checks (lint, test, build). For each failure that requires a code change, include a chunk in the plan (e.g. fix lint, fix failing test). Review check logs if pasted; ensure the plan covers every fix needed so all checks can pass.
-4. **Scope: changed code only** — **`git diff base...HEAD --name-only`**. Only plan edits in these files; within them, prefer **changed regions** (what the PR actually changed). Avoid touching previously working, unchanged code. Compare with main so edits don't unnecessarily impact code that is identical to main.
+4. **Scope: changed code only** — **`git diff <base>...HEAD --name-only`**. Only plan edits in these files; within them, prefer **changed regions** (what the PR actually changed). Avoid touching previously working, unchanged code. Compare with base so edits don't unnecessarily impact code that is identical to base.
 5. **Consolidate** — For each comment (and each failed check that implies a code change): **Comment** (what it says), **Current code** (snippet, file:line), **Why wrong** (or “wrong assumption”), **Needs change?** (Yes / No — wrong assumption / No — already correct), **Expected result** (minimal change or suggested reply).
 6. **Plan** — Write **`.cursor/research-plan.md`** with an **Implementation plan** where each chunk is one comment or one check fix: **Add/change** or **Update/wire** at specific file path and line/region. So **context-execute** can apply each chunk. If “Needs change? = No”, note “Reply to reviewer: …” instead of a code edit. Ensure every comment and every failing check that needs a fix has a corresponding chunk.
 
@@ -111,4 +114,4 @@ Use the **summary** of the context: themes, requirements, APIs, constraints from
 ## Notes
 
 - **Workflow:** **context-add** → **context-plan** → **context-execute**. Use **context-clear** to reset. For PR review, context can be “PR comments + repo”; no need to run context-add if the user pasted the PR or you fetch it via `gh`.
-- **PR review:** This skill replaces the former **gh-pr-review** flow: gather comments, compare with code, produce a plan of minimal changes. It does not run format/lint/test or sync (use **gh-pull**, **gh-push**, etc. separately).
+- **PR review:** This skill follows the **gh-pr** flow: gather comments, compare with code, and produce a plan of minimal changes. It does not run format/lint/test or sync (use **gh-pull**, **gh-push**, etc. separately).

@@ -27,7 +27,10 @@ Start immediately. Run commands one by one. If the user did not give a ticket, i
 
 2. **Branch name** — Set `BRANCH=<derived-name>`. Must be a valid git branch name (no spaces, no `..`, no `~^:`). If the derived name is empty or invalid, ask the user for a branch name.
 
-3. **Ensure main is current** — `git fetch origin`. If upstream exists: `git fetch upstream`. Checkout main: `git checkout main`. Update main: `git merge origin/main` (or `git pull origin main`). For a fork, optionally merge upstream: `git merge upstream/main` if upstream is configured. Resolve conflicts only if the user asks; otherwise stop and report.
+3. **Ensure main is current** — `git fetch origin` and `git fetch upstream` if configured. Checkout `main`: `git checkout main`. Update the local base with the canonical source:
+   - same-repo: `git merge --ff-only origin/main` (or `git pull origin main`)
+   - fork: `git merge --ff-only upstream/main` when upstream is configured and has updates
+   Resolve conflicts only if the user asks; otherwise stop and report.
 
 4. **Create branch** — `git checkout -b "$BRANCH"`.
 
