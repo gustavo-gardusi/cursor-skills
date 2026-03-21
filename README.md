@@ -71,17 +71,17 @@ Located in **`skills/context/`**.
 
 Located in **`skills/gh/`**.
 
-| Skill | What it does | Calls other `gh-*` (in order) |
-|-------|----------------|--------------------------------|
-| `/gh-check` | Discover from README/config/CI; install/build; format, lint, test. **`/gh-push`** always runs this first. | — |
-| `/gh-reset` | Stash (default), hard reset, clean; optional stash prune. | — |
-| `/gh-pr` | Create or update PR via `gh` (description; no merge, no push). | — |
-| `/gh-pull` | Fetch/merge tracking + canonical `main`; resolve conflicts; **no push**. | — |
-| `/gh-push` | Docs, commit if needed, then `git push` (starts with full **`/gh-check`**). | `/gh-check` |
-| `/gh-main` | Checkout `main`; reset and merge **main** locally (**no push**). | `/gh-reset` → `/gh-pull` |
-| `/gh-start` | **`/gh-main`**, new branch, then **`/gh-push`** (publish the branch). | `/gh-main` → `/gh-push` |
+| Skill | What it does | Dependency graph |
+|-------|----------------|------------------|
+| `/gh-check` | Figures out how the project expects to be built and tested, installs what’s needed, then runs format/lint/tests. Stops if anything fails—no commit or push. | — |
+| `/gh-reset` | Stays on the **current** branch; **no stash**—if the tree is dirty, **stop** or **confirm trash** (discard all local changes). Then dry-run **`git clean`**, confirm **reset** and **clean**, and optional non-git purges. | — |
+| `/gh-pull` | Fetches and merges the branch’s upstream and the repo’s canonical `main` into the current branch; resolves merge conflicts. Does not push. | — |
+| `/gh-push` | Runs the full verify pass, aligns main docs if needed, commits when there are changes, then pushes the current branch (or sets upstream on first push). | `/gh-check` |
+| `/gh-main` | Checks out `main`, resets it to match remote, and merges the latest canonical `main`—all **local**; you publish `main` separately if you want it on the remote. | `/gh-reset` → `/gh-pull` |
+| `/gh-start` | Refreshes local `main`, creates a **new branch** from it (name from ticket/issue/task), and **publishes** that branch to the remote. | `/gh-main` → `/gh-push` |
+| `/gh-pr` | Publishes current work the same way as push, then **creates or updates** the GitHub PR (title/body). Does not merge. | `/gh-push` |
 
-**Orchestrators** (invoke other `gh-*` skills): **`/gh-start`**, **`/gh-main`**, **`/gh-push`**. **Do not invoke other `gh-*` from inside the skill:** **`/gh-check`**, **`/gh-reset`**, **`/gh-pull`**, **`/gh-pr`**.
+**Orchestrators** (non-empty dependency graph): **`/gh-start`**, **`/gh-main`**, **`/gh-push`**, **`/gh-pr`**. **Leaf** (graph `—`): **`/gh-check`**, **`/gh-reset`**, **`/gh-pull`**.
 
 ---
 

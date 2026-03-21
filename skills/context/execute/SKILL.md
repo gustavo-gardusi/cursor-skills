@@ -86,4 +86,4 @@ Parse each **`### Chunk`** and apply the three bullet types in order. Respect an
 > **`@gh-start`** — New branch from a task; it runs **`@gh-main`** first, then creates the branch—do **not** run **`@gh-main`** separately before **`@gh-start`**. (External **`start-task-jira`** skill may overlap; avoid double **`@gh-main`**.)  
 > **`@gh-check`** — Run the **full** skill **[`@gh-check`](../../gh/check/SKILL.md)** (map deps → install → format → lint e.g. Clippy/Ruff/Flake8 → test).  
 > **`@gh-push`** — Commit + publish; run the **full** skill (verify-before-push is defined there only).  
-> **`@gh-pr`** — Open or update PR metadata after the branch is published.
+> **`@gh-pr`** — Runs **`@gh-push`** first, then opens or updates PR metadata.

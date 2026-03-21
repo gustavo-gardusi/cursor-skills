@@ -13,7 +13,7 @@ description: >-
 
 **Does not do:** merges (**[`@gh-pull`](../pull/SKILL.md)**), new branches (**[`@gh-start`](../start/SKILL.md)**), hard reset (**[`@gh-reset`](../reset/SKILL.md)**), PR text (**[`@gh-pr`](../pr/SKILL.md)**), or any **`npm test` / `cargo fmt` / lint**—that is only **`@gh-check`**.
 
-**When another skill “publishes”:** **`@gh-start`** runs **this** skill **after** **`@gh-main`** and **`git checkout -b`** (new branch). **`@gh-main`** and **`@gh-pull`** do **not** invoke **`@gh-push`**. For **verify without push**, use **`@gh-check`** alone.
+**When another skill “publishes”:** **`@gh-start`** runs **this** skill **after** **`@gh-main`** and **`git checkout -b`** (new branch). **`@gh-pr`** runs **this** skill **first** (verify, commit, push), then PR metadata. **`@gh-main`** and **`@gh-pull`** do **not** invoke **`@gh-push`**. For **verify without push**, use **`@gh-check`** alone.
 
 ### Invariant (canonical; do not copy elsewhere)
 
@@ -63,4 +63,4 @@ Compare README (and any other main docs) to the current repo. Apply minimal edit
 *`@gh-push`*
 - Run from the repo root.
 - If the tree is clean and docs are already accurate, §2 may be a no-op; **Publish** still runs when the branch is ahead (merge commits, new branches).
-- After a successful push, PR title/body on GitHub → invoke **`@gh-pr`** separately if needed.
+- After a successful push, to open or refresh a PR → invoke **`@gh-pr`** (it runs **`@gh-push`** again first; often a no-op if already clean and pushed).

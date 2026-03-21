@@ -18,7 +18,7 @@ description: >-
 
 ## On invoke
 
-*`@gh-start`* — Run steps in order. If the user did not give a ticket, issue, or activity, ask: "What's the Jira ticket, GitHub issue, or activity for this branch?" If there are **uncommitted changes** that would block **`@gh-main`** (e.g. on `main`), stash or commit first—**`@gh-main`** is destructive on `main` when dirty (see that skill).
+*`@gh-start`* — Run steps in order. If the user did not give a ticket, issue, or activity, ask: "What's the Jira ticket, GitHub issue, or activity for this branch?" If you are on **`main`** with **uncommitted changes**, **`@gh-main`** → **`@gh-reset`** will **not** stash: user must **commit**, **abort**, or **explicitly confirm trash** (see **`@gh-reset`**). Prefer **commit** before **`@gh-start`** if they need to keep the work.
 
 ## Workflow
 
@@ -62,4 +62,4 @@ description: >-
 - Run from the repo root. Prerequisites: `git`; for GH issue title, `gh` and repo context.
 - **Do not** run **`@gh-main`** again in other skills when the user asked for **`@gh-start`**—**`@gh-start`** already includes it.
 - To **only** refresh **local** **`main`** without a new branch, invoke **`@gh-main`** alone—not **`@gh-start`**. To publish **`main`**, run **`@gh-push`** after **`@gh-main`**.
-- For PR text or verify-only: **`@gh-pr`**, **`@gh-check`**—see those skills.
+- For a PR (includes verify + push first): **`@gh-pr`**. For **verify only** (no push): **`@gh-check`**.

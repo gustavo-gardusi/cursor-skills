@@ -15,7 +15,7 @@ description: >-
 
 ## On invoke
 
-*`@gh-main`* — State that **`@gh-reset`** **stashes** dirty trees by default, then hard-resets and cleans (see that skill). Run commands one by one.
+*`@gh-main`* — State that **`@gh-reset`** does **not** stash: on a dirty **`main`**, the user must **abort** or **explicitly trash** local changes before reset+clean (see that skill). Run commands one by one.
 
 ## Workflow
 
@@ -35,7 +35,7 @@ If `main` does not exist locally but exists as `origin/main`: `git checkout -b m
 ### 3. Hand off to **`@gh-reset`**
 
 > **Run the full Cursor skill [`@gh-reset`](../reset/SKILL.md)** — not a shortcut.  
-> On the current branch (`main`), execute **every** step of **`@gh-reset`**: validate → branch → fetch → `TARGET` → **stash if dirty** → confirm → `git reset --hard` → `git clean` → optional stash prune (only if user asked) → verify. Do **not** replace with ad-hoc `git reset`/`clean` unless the user explicitly opts out of the skill.
+> On the current branch (`main`), execute **every** step: validate → stay on branch → fetch → resolve **`$TARGET`** → **if dirty: abort or confirm trash** (no stash) → **discover** repo signals → **`git clean -fdxn`** dry-run → **confirm** reset+clean (see **`@gh-reset`** nested rule for one combined confirm) → **`git reset --hard`** → **confirm** clean if not combined → **`git clean -fdx`** → optional non-git caches (if user asked) → verify. Do **not** replace with ad-hoc `git reset`/`clean` unless the user explicitly opts out of the skill.
 
 ### 4. Hand off to **`@gh-pull`**
 
@@ -54,5 +54,5 @@ If `main` does not exist locally but exists as `origin/main`: `git checkout -b m
 
 *`@gh-main`*
 - **Order matters:** **`@gh-reset`** → **`@gh-pull`** only.
-- **`@gh-reset`** stashes by default when dirty—recover with **`git stash list`** / **`pop`**; you only need to stash manually if you skip **`@gh-reset`** or use discard-without-stash.
+- **`@gh-reset`** does **not** stash—if **`main`** is dirty, **commit** first or **abort**; to throw work away, confirm **trash and align** inside **`@gh-reset`**.
 - For a **feature branch** sync (not switching to main), use **`@gh-pull`** alone on that branch, not **`@gh-main`**.

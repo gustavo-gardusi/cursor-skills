@@ -137,4 +137,4 @@ Use the **summary** of the context: themes, requirements, APIs, constraints from
 
 > **`@context-execute`** — Run the **full** **`@context-execute`** skill to apply `.cursor/research-plan.md` to the repo.  
 > **`@gh-pull`** / **`@gh-push`** — Sync and publish; **not** embedded in **`@context-plan`**.  
-> **`@gh-pr`** — Create/update PR description only.
+> **`@gh-pr`** — **`@gh-push`** then create/update PR (metadata via `gh`).
