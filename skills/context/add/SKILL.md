@@ -9,6 +9,8 @@ description: >-
 
 # Context: add
 
+**Cursor skill:** **`@context-add`** — Invoked with **`@context-add`** in Cursor. Only **`@context-add`** may write or merge into **`.cursor/research-context.json`**. Planning and repo edits are **other skills** (see **Hand off** at the end).
+
 **Goal:** Reach and verify destination pages one URL at a time.
 - Keep each provided URL in scope until expected content appears.
 - Detect blockers such as login/SSO/app mismatch/thread not opened.
@@ -32,6 +34,8 @@ closes the browser when the flow is complete. The same profile is reused across 
 ---
 
 ## Destination tracking flow
+
+*`@context-add`*
 
 1. **Collect input URLs** — One or many URLs from the user.
 2. **Open and observe** — Start a dedicated browser session (or attach intentionally if needed) and run fetch in observer mode.
@@ -271,21 +275,31 @@ node {{base:scripts/context}}/write-readable.js
 
 ## On invoke
 
+*`@context-add`*
+
 1. Start a fresh browser session via the fetch command above (it uses the shared profile automatically).
 2. **Normalize URLs:** GitHub — use as-is. Jira — browser URL (atlassian.net). Slack — **browser URL only** (not the desktop app). For **Slack thread**: user must open the thread (View thread / replies) so full discussion is visible; say **ready** when ready.
 3. For each URL, run fetch in observer mode for a conversational window (`--observe` + `--observe-ms`, usually `0`) and classify the current snapshot using destination expectations.
    - If blocked (SSO/login/app mismatch/thread not opened), report blocker and ask for user action.
    - If destination is reached, run a final fetch with `--out` and then apply **append-result.js**.
 4. Use **`--wait-after-load 5000`** for Slack URLs. Validate against the Expected content table; treat missing content as "not there yet" (user opens thread / tab, then **ready**).
-5. When all requested URLs are evaluated (or user stops), run **write-readable.js**, summarize what was stored, and suggest **@context-show** to confirm.
+5. When all requested URLs are evaluated (or user stops), run **write-readable.js**, summarize what was stored, and suggest **`@context-show`** to confirm.
 
 ---
 
 ## Verification
+
+*`@context-add`*
 
 - [ ] Context: **.cursor/research-context.json** and **.cursor/research-context.txt** present; each result has **links.best** when the page had links; no repo files changed.
 - [ ] Fetch was **read-only** (no interaction with pages).
 - [ ] Results were validated; user was prompted (Got/Expected/Waiting for/Recommendation) to retry or skip when content didn’t match.
 - [ ] Interactivity: when needed, recommended **login** (in tab), **Slack in browser** (not app), **unwrap thread / nested thread**, and only **relevant sublinks**.
 - [ ] Recorder of pages: when done with a PR or Jira (or other entity), stated what was collected and recommended **next links** with **what to do** (e.g. open Files changed, open Actions run, add Slack URL).
-- [ ] Next: **context-show** for summary; **context-plan** reads context (read-only) and writes `.cursor/research-plan.md`.
+- [ ] Next: see **Hand off** below.
+
+### Hand off to other Cursor skills (not `@context-add`)
+
+> **`@context-show`** — Read-only summary of `.cursor/research-context.json`. Run the **full** **`@context-show`** skill to confirm storage.  
+> **`@context-plan`** — Read-only: reads context + repo; writes **only** `.cursor/research-plan.md`. Do **not** mix plan writing into **`@context-add`**.  
+> **`@context-execute`** — Applies the plan to the repo; only after **`@context-plan`**.

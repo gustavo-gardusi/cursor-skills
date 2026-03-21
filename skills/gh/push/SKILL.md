@@ -1,33 +1,37 @@
 ---
 name: gh-push
 description: >-
-  Ensure existing code works (format, lint, test), documentation is up to date,
-  then a summarized commit and push to the current branch.
+  Mandatory gh-check first, then docs touch-up, commit if needed, git push.
+  Only this skill runs git push; verification lives entirely in gh-check.
 ---
 
-# Push
+# Push (commit + publish, after **`@gh-check`**)
 
-**Responsibility:** Before pushing: (1) run checks so **existing code works**, (2) bring **documentation up to date** with the repo, then (3) a **summarized commit message** and **push to the current branch**. Use when finishing local work and pushing with code and docs in good shape.
+**Cursor skill:** **`@gh-push`** — Invoked with **`@gh-push`** in Cursor. **Core concept:** **publish** the current branch—**commit** if needed, then **`git push`**. Everything before that is: (a) **verification** via **`@gh-check`** only, (b) **optional** minimal doc alignment so README matches the tree.
+
+**Responsibility (only this skill):** This file is the **only** place that defines **verify → then commit/push**. (1) Run **full** **`@gh-check`** (**[`@gh-check`](../check/SKILL.md)**) before any staging, commit, or push. (2) Align main docs if needed. (3) **Commit** when the tree needs it. (4) **`git push`** / **`git push -u`**. No other skill runs **`git push`**.
+
+**Does not do:** merges (**[`@gh-pull`](../pull/SKILL.md)**), new branches (**[`@gh-start`](../start/SKILL.md)**), hard reset (**[`@gh-reset`](../reset/SKILL.md)**), PR text (**[`@gh-pr`](../pr/SKILL.md)**), or any **`npm test` / `cargo fmt` / lint**—that is only **`@gh-check`**.
+
+**When another skill “publishes”:** **`@gh-start`** runs **this** skill **after** **`@gh-main`** and **`git checkout -b`** (new branch). **`@gh-main`** and **`@gh-pull`** do **not** invoke **`@gh-push`**. For **verify without push**, use **`@gh-check`** alone.
+
+### Invariant (canonical; do not copy elsewhere)
+
+**Never** `git add`, **`git commit`**, or **`git push`** until **§1** — the **complete** **`@gh-check`** skill — has **succeeded**. On failure, stop. If failure looks like missing or broken dependencies, **re-run** **`@gh-check`** after fixing README or environment (that skill maps installs before lint/test).
 
 ## On invoke
 
-Start immediately. Run steps in order. Stop if any check fails; do not commit or push until checks pass and docs are updated.
+*`@gh-push`* — Run steps **1 → 2 → 3** in order. If **`@gh-check`** fails, **stop**—do not commit or push.
 
 ## Workflow
 
-### 1. Ensure existing code works
+### 1. Hand off to **`@gh-check`** (required before §2–3)
 
-Run the checks the project expects. Prefer project-defined commands; otherwise use language-specific format, lint, and test.
-
-- **Prefer:** `make check`, `make test`, `npm run check`, `npm run validate`, `pnpm run check`, `cargo check`, `go test ./...`, etc. (from root).
-- **Else detect project** and run the matching steps:
-  - `package.json` / Node → format, lint, test
-  - `Cargo.toml` → Rust
-  - `pyproject.toml` / `setup.py` → Python
-  - `go.mod` → Go
-- **Stop** if any step fails. Report the failure; do not proceed.
+> Execute the **entire** Cursor skill **[`@gh-check`](../check/SKILL.md)** — every section, in order. No shortcuts. **This step is the only definition of “green” before commit/push** for this repo workflow.
 
 ### 2. Documentation up to date
+
+*`@gh-push`* — Only after §1 succeeded.
 
 Compare README (and any other main docs) to the current repo. Apply minimal edits so documentation accurately describes the project.
 
@@ -36,16 +40,27 @@ Compare README (and any other main docs) to the current repo. Apply minimal edit
 - **Structure** — Adjust if the doc describes dirs or key files that no longer match.
 - Only change what is wrong or outdated; no style-only rewrites.
 
-### 3. Summarized commit and push to current branch
+### 3. Commit (if needed) and publish
+
+*`@gh-push`* — Only after §1 succeeded. Includes `git push` / `git push -u` only as below.
 
 - **Clean temp dirs** — Remove any temporary output dirs that should not be committed (e.g. temp dirs from url fetch runs). Use a random temp path for any one-off output during this run, then delete it so the working tree has no leftover temp dirs.
-- **Stage** — default to adding only the paths changed by the workflow/docs updates (`git add <path...>`). Use `git add .` only if the change list is very broad or the user explicitly asks for that behavior.
-- **Message** — One short line summarizing the change (e.g. from `git diff --stat` or a brief summary).
-- **Commit** — `git commit -m "<summary>"`.
-- **Push** — `git push` (push to the current branch’s upstream).
+
+- **If there are changes to commit** (`git status` not clean after step 2):
+  - **Stage** — default to adding only the paths changed by the workflow/docs updates (`git add <path...>`). Use `git add .` only if the change list is very broad or the user explicitly asks for that behavior.
+  - **Message** — One short line summarizing the change (e.g. from `git diff --stat` or a brief summary).
+  - **Commit** — `git commit -m "<summary>"`.
+
+- **Publish** (after successful **`@gh-check`** in §1; after commit when one was made, or when the tree was already clean after §2):
+  - `BRANCH=$(git branch --show-current)`; fail if detached.
+  - If upstream is configured and the branch is **ahead** of `@{u}`: `git push`.
+  - Else if **no upstream** (`git rev-parse @{u}` fails): `git push -u origin "$BRANCH"` so the remote branch exists (including a new branch that only exists locally).
+  - Else if not ahead and upstream exists: report branch is already published (nothing to push).
+  - If push fails (permissions, protected branch), report the error; do not force-push unless the user explicitly asks.
 
 ## Notes
 
+*`@gh-push`*
 - Run from the repo root.
-- If the tree is clean and docs are already accurate, step 2 may be a no-op.
-- **Split:** Checks + commit + push only (no doc updates) → **code-ship**. After push, to open or update a PR → **gh-pr**.
+- If the tree is clean and docs are already accurate, §2 may be a no-op; **Publish** still runs when the branch is ahead (merge commits, new branches).
+- After a successful push, PR title/body on GitHub → invoke **`@gh-pr`** separately if needed.

@@ -9,7 +9,9 @@ description: >-
 
 # Context: execute (query plan; change repo only)
 
-**Goal:** **Mostly query from the plan** and **change the current repo.** Read the implementation plan from **`.cursor/research-plan.md`** (or from the user's message). Apply it: add or change files, update/wire code, run one-off commands as specified in each chunk. **Only the repo (code/config) is modified**; do not change `.cursor/research-context.json` or `.cursor/research-plan.md`. Use after **context-plan** is done.
+**Cursor skill:** **`@context-execute`** — Invoked with **`@context-execute`** in Cursor. **Only** changes the **repo** (code/config) per the plan; never rewrites `.cursor/research-context.json` or `.cursor/research-plan.md`. Run **after** **`@context-plan`** (or a user-pasted plan). Git publish/PR are **not** this skill—**Hand off** to **`@gh-push`** / **`@gh-pr`** when needed.
+
+**Goal:** **Mostly query from the plan** and **change the current repo.** Read the implementation plan from **`.cursor/research-plan.md`** (or from the user's message). Apply it: add or change files, update/wire code, run one-off commands as specified in each chunk. **Only the repo (code/config) is modified**; do not change `.cursor/research-context.json` or `.cursor/research-plan.md`. Use after **`@context-plan`** is done.
 
 **Input:** Prefer **`.cursor/research-plan.md`**. If missing, use the plan the user pasted or provided in chat.
 
@@ -17,7 +19,9 @@ description: >-
 
 ## Plan file structure (what to parse)
 
-**context-plan** writes `.cursor/research-plan.md` with this structure:
+*`@context-execute`* — Input from **`@context-plan`**.
+
+**`@context-plan`** writes `.cursor/research-plan.md` with this structure:
 
 - **`## Relation to repo`** — Short paragraph (informational).
 - **`## Impact summary`** — Table: source/context → repo areas (informational).
@@ -33,6 +37,8 @@ Parse each **`### Chunk`** and apply the three bullet types in order. Respect an
 
 ## Query plan; change repo only
 
+*`@context-execute`*
+
 - **Read** the plan file (or plan from chat). Parse **Relation to repo**, **Impact summary**, and **Implementation plan** chunks.
 - **Apply** each chunk to the **repo**: run one-off commands, create or edit files (Add/change, Update/wire). Do **not** write back to the plan file or touch the context file.
 
@@ -40,16 +46,20 @@ Parse each **`### Chunk`** and apply the three bullet types in order. Respect an
 
 ## On invoke
 
+*`@context-execute`*
+
 1. **Load the plan** — Read **`.cursor/research-plan.md`** if it exists. Else use the plan from the user's message. Parse the markdown: `## Implementation plan`, then each `### Chunk N` with Run/one-off, Add/change, Update/wire.
 2. **Apply each chunk** — In order (respect dependencies if the plan specifies order):
    - **Run / one-off:** Run the command if any (e.g. install deps, generate code).
    - **Add / change:** Create or edit the listed file(s) as specified.
    - **Update / wire:** Update the listed file(s) (e.g. register routes, wire config).
-3. **Verify** — After applying, run format/lint/tests if appropriate and fix any issues. Scope changes to the plan only.
+3. **Verify** — After applying, run the full **[`@gh-check`](../../gh/check/SKILL.md)** skill (or **`@gh-push`** if the user is ready to commit and publish). Do **not** invent ad-hoc `npm test` / `cargo test` one-offs unless the plan names a specific command. Scope changes to the plan only.
 
 ---
 
 ## Scope and safety
+
+*`@context-execute`*
 
 - **Only change what the plan specifies.** Do not refactor or edit files not mentioned in the plan unless necessary to wire something (minimal changes).
 - If the plan is ambiguous or a path is missing, ask the user or infer from the repo layout before editing.
@@ -59,13 +69,21 @@ Parse each **`### Chunk`** and apply the three bullet types in order. Respect an
 
 ## Verification
 
+*`@context-execute`*
+
 - [ ] Plan loaded and chunks parsed; each chunk applied to the repo.
 - [ ] No edits to `.cursor/research-context.json` or `.cursor/research-plan.md`.
-- [ ] Optional: format, lint, test; branch/PR via **gh-branch**, **gh-push**, **gh-pr**.
 
 ---
 
 ## Notes
 
-- **Workflow:** **context-add** (only changes context file) → **context-plan** (only reads context + repo, writes plan file) → **context-execute** (only reads plan, changes repo).
-- **Branch/PR:** Consider **gh-branch** or **start-task-jira** before executing; after changes, **gh-push** or **gh-pr**.
+*`@context-execute`*
+- **Workflow:** **`@context-add`** → **`@context-plan`** → **`@context-execute`**.
+
+### Hand off (not part of `@context-execute`)
+
+> **`@gh-start`** — New branch from a task; it runs **`@gh-main`** first, then creates the branch—do **not** run **`@gh-main`** separately before **`@gh-start`**. (External **`start-task-jira`** skill may overlap; avoid double **`@gh-main`**.)  
+> **`@gh-check`** — Run the **full** skill **[`@gh-check`](../../gh/check/SKILL.md)** (map deps → install → format → lint e.g. Clippy/Ruff/Flake8 → test).  
+> **`@gh-push`** — Commit + publish; run the **full** skill (verify-before-push is defined there only).  
+> **`@gh-pr`** — Open or update PR metadata after the branch is published.

@@ -9,6 +9,8 @@ description: >-
 
 # Context: plan (read context + repo; write plan only)
 
+**Cursor skill:** **`@context-plan`** — Invoked with **`@context-plan`** in Cursor. **Read-only** for context and repo; **writes only** `.cursor/research-plan.md`. Does **not** run **`@gh-pull`**, **`@gh-push`**, or **`@context-execute`**—those are separate invocations.
+
 **Goal:** **Read-only.** Read **context** (from **`.cursor/research-context.json`** or the user’s message) and the **current repo** (read-only). **Understand what the context has to do with the current branch and code**: which files are in scope, how they differ from main, and what minimal changes are needed. **Compare and plan**: what can be done, and what to do (concrete steps with file paths). Write the result to **`.cursor/research-plan.md`** only. **Do not change** the context file or the repo. Use for many cases: research vs codebase, **PR review** (address all comments, review code checks), **failing tests**, or any task that benefits from “plan ahead” by comparing information with the codebase.
 
 **Input (read-only):** `.cursor/research-context.json`, user task, pasted content (e.g. PR description, review comments, test logs). **Repo:** read-only.
@@ -18,6 +20,8 @@ description: >-
 ---
 
 ## Relation to current branch and code
+
+*`@context-plan`*
 
 Before writing the plan, **establish scope** so the plan stays minimal and avoids high-impact changes to main:
 
@@ -33,7 +37,9 @@ Before writing the plan, **establish scope** so the plan stays minimal and avoid
 
 ## Use cases
 
-- **Research / feature work** — Context from **context-add** (URLs, docs, tickets). Compare with repo; produce implementation plan (relation to repo, impact, chunks with file paths). Scope edits to files that need to change for the feature; compare with main so you don’t overwrite or conflict with it.
+*`@context-plan`*
+
+- **Research / feature work** — Context from **`@context-add`** (URLs, docs, tickets). Compare with repo; produce implementation plan (relation to repo, impact, chunks with file paths). Scope edits to files that need to change for the feature; compare with main so you don’t overwrite or conflict with it.
 - **PR review** — User has a PR and review comments (or you fetch them via `gh pr view`, `gh api repos/.../pulls/.../comments`). **Compare current code with what each comment requires.** For each comment: what it says, how the code looks now, why it’s wrong (or wrong assumption), and the **minimal expected change** (file + line/region). **Ensure all comments are addressed** in the plan (each comment → one chunk or “Reply to reviewer: …”). **Review code checks**: run `gh pr checks <PR>` or use `statusCheckRollup`; list failed checks and, for each failure that implies a code change (e.g. lint, test), add a chunk to fix it. Plan = list of chunks (one per comment or per fix). Touch **only changed files** (`git diff base...HEAD --name-only`); within those files, prefer editing only the **lines the PR changed**. Do not refactor or “improve” unchanged code.
 - **Failing tests** — User pastes test/CI logs or error output. Compare failure with the relevant code (file/line). Plan = minimal code changes to fix the reported error, in **changed or relevant code** only. If the failure is on a branch, scope to that branch’s diff vs main.
 - **Lots of information** — User provides a large dump (e.g. many pages, many comments). Summarize; compare with repo; produce a prioritized plan (what to do first, with file paths and concrete steps). Keep scope minimal: only the files that must change.
@@ -42,7 +48,9 @@ Before writing the plan, **establish scope** so the plan stays minimal and avoid
 
 ## Context file shape (read-only)
 
-**context-add** writes `.cursor/research-context.json`. Expect:
+*`@context-plan`* — Reading only.
+
+**`@context-add`** writes `.cursor/research-context.json`. Expect:
 
 - **`results`** — Array of page objects: `{ url, title, text, ok, error?, links? }`. Each entry is one fetched page.
 - **`lastFetched`** — ISO 8601 timestamp (optional).
@@ -53,6 +61,8 @@ Use the **summary** of the context: themes, requirements, APIs, constraints from
 ---
 
 ## When the task is PR review
+
+*`@context-plan`*
 
 1. **Resolve PR and base** — PR from user (URL or number). Base: `upstream/main` if fork, else `main`. `gh pr view <PR> --json baseRefName,headRefName,number,title,body,url,comments,reviews`.
 2. **Gather comments** — Top-level comments (`comments`), review bodies (`reviews`), inline comments (`gh api repos/OWNER/REPO/pulls/NUMBER/comments`). Plus any pasted content or failed-check logs. One list: section, author, body. **All comments must be addressed** in the plan (each appears as a chunk or a "Reply to reviewer" note).
@@ -65,6 +75,8 @@ Use the **summary** of the context: themes, requirements, APIs, constraints from
 
 ## On invoke (general)
 
+*`@context-plan`*
+
 1. **Load context (read-only)** — Read `.cursor/research-context.json` if it exists; otherwise use the user’s message or pasted content. Summarize: themes, requirements, comments, errors.
 2. **Parse the task** — What the user wants (implement feature, address PR review, fix failing tests, compare info with codebase).
 3. **Explore the repo (read-only)** — Layout, entrypoints. **Establish scope**: current branch (`git branch --show-current`), diff vs main (`git diff main...HEAD --name-only` or `base...HEAD` for PRs). Only plan edits in scoped files and regions; avoid impacting code that is identical to main. No edits.
@@ -75,6 +87,8 @@ Use the **summary** of the context: themes, requirements, APIs, constraints from
 ---
 
 ## Plan file format (for `.cursor/research-plan.md`)
+
+*`@context-plan`* — Output shape for **`@context-execute`**.
 
 ```markdown
 ## Relation to repo
@@ -105,13 +119,22 @@ Use the **summary** of the context: themes, requirements, APIs, constraints from
 
 ## Verification
 
+*`@context-plan`*
+
 - [ ] Context loaded (read-only); task parsed; repo explored (read-only).
 - [ ] Plan written to **`.cursor/research-plan.md`** only; context file and repo unchanged.
-- [ ] Next: **context-execute** reads the plan and applies changes.
+- [ ] Next: see **Hand off**.
 
 ---
 
 ## Notes
 
-- **Workflow:** **context-add** → **context-plan** → **context-execute**. Use **context-clear** to reset. For PR review, context can be “PR comments + repo”; no need to run context-add if the user pasted the PR or you fetch it via `gh`.
-- **PR review:** This skill follows the **gh-pr** flow: gather comments, compare with code, and produce a plan of minimal changes. It does not run format/lint/test or sync (use **gh-pull**, **gh-push**, etc. separately).
+*`@context-plan`*
+- **Workflow:** **`@context-add`** → **`@context-plan`** → **`@context-execute`**. Use **`@context-clear`** to reset. For PR review, context can be “PR comments + repo”; no need to run **`@context-add`** if the user pasted the PR or you fetch it via `gh`.
+- **PR review:** This skill plans minimal changes; it does **not** open the PR (**`@gh-pr`**) or publish (**`@gh-pull`** / **`@gh-push`**). Run those in **separate** Cursor invocations when needed.
+
+### Hand off (not part of `@context-plan`)
+
+> **`@context-execute`** — Run the **full** **`@context-execute`** skill to apply `.cursor/research-plan.md` to the repo.  
+> **`@gh-pull`** / **`@gh-push`** — Sync and publish; **not** embedded in **`@context-plan`**.  
+> **`@gh-pr`** — Create/update PR description only.

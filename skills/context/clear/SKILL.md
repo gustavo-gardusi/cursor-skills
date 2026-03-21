@@ -8,13 +8,17 @@ description: >-
 
 # Context: clear
 
-**Goal:** Clear the research context and visited set so the next **context-add** run starts fresh. Remove or truncate **`.cursor/research-context.json`**, **`.cursor/research-context.txt`** (if present), and **`.cursor/research-visited.txt`**. Does not modify the repo or **`.cursor/research-plan.md`** unless the user asks to clear the plan too.
+**Cursor skill:** **`@context-clear`** — Invoked with **`@context-clear`** in Cursor. Only clears context/visited files under `.cursor/`; does **not** run **`@context-add`**, **`@context-plan`**, or **`@context-execute`**.
+
+**Goal:** Clear the research context and visited set so the next **`@context-add`** run starts fresh. Remove or truncate **`.cursor/research-context.json`**, **`.cursor/research-context.txt`** (if present), and **`.cursor/research-visited.txt`**. Does not modify the repo or **`.cursor/research-plan.md`** unless the user asks to clear the plan too.
 
 **When to use:** User wants to reset context, discard previously fetched data, or start a new research run without old URLs in the visited set. Clears **`.cursor/research-context.json`** and **`.cursor/research-visited.txt`**.
 
 ---
 
 ## On invoke
+
+*`@context-clear`*
 
 1. If **`.cursor/research-context.json`** exists: delete it or overwrite with `{ results: [], lastFetched: null }`. If **`.cursor/research-context.txt`** exists, delete it.
 2. If **`.cursor/research-visited.txt`** exists: delete it or overwrite with an empty file.
@@ -25,5 +29,11 @@ description: >-
 
 ## Verification
 
+*`@context-clear`*
+
 - [ ] `.cursor/research-context.json` is empty or removed; `.cursor/research-visited.txt` is empty or removed.
 - [ ] No repo files changed.
+
+### Hand off
+
+> Next research run: invoke **`@context-add`** fresh. To plan/apply work, use **`@context-plan`** then **`@context-execute`** (separate invocations).
