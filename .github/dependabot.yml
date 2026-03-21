@@ -1,0 +1,8 @@
+# Open PRs for npm updates under scripts/ (Playwright, test runner, etc.).
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /scripts
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5

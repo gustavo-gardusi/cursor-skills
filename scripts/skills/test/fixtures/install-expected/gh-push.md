@@ -1,0 +1,68 @@
+---
+name: gh-push
+description: >-
+  Mandatory gh-check first, then docs touch-up, commit if needed, git push.
+  Only this skill runs git push; verification lives entirely in gh-check.
+---
+
+# Push (commit + publish, after **`@gh-check`**)
+
+**Cursor skill:** **`@gh-push`** — Invoked with **`@gh-push`** in Cursor. **Core concept:** **publish** the current branch—**commit** if needed, then **`git push`**. Everything before that is: (a) **verification** via **`@gh-check`** only, (b) **optional** minimal doc alignment so README matches the tree.
+
+**Where it runs:** The **current workspace** git repository.
+
+**Responsibility (only this skill):** This file is the **only** place that defines **verify → then commit/push**. (1) Run **full** **`@gh-check`** (**[`@gh-check`](../gh-check/SKILL.md)**) before any staging, commit, or push. (2) Align main docs if needed. (3) **Commit** when the tree needs it. (4) **`git push`** / **`git push -u`**. No other skill runs **`git push`**.
+
+**Does not do:** merges (**[`@gh-pull`](../gh-pull/SKILL.md)**), new branches (**[`@gh-start`](../gh-start/SKILL.md)**), aligning **`main`** to a remote tip (**[`@gh-main`](../gh-main/SKILL.md)**), PR text (**[`@gh-pr`](../gh-pr/SKILL.md)**), or **any** install / format / lint / test / build command **by name**—**[`@gh-check`](../gh-check/SKILL.md)** owns the full matrix; this skill **only** hands off to it in §1.
+
+**When another skill “publishes”:** **`@gh-start`** runs **this** skill **after** **`@gh-main`** and **`git checkout -b`** (new branch). **`@gh-pr`** runs **[`@gh-pull`](../gh-pull/SKILL.md)** first (merge **`main`**, resolve conflicts), **then** **this** skill (**`@gh-check`** inside §1 → docs → push), then PR metadata. **`@gh-main`** and **`@gh-pull`** alone do **not** invoke **`@gh-push`**. For **verify without push**, use **`@gh-check`** alone.
+
+### Invariant (canonical; do not copy elsewhere)
+
+**Never** `git add`, **`git commit`**, or **`git push`** until **§1** — the **complete** **`@gh-check`** skill — has **succeeded**. On failure, stop. If failure looks like missing or broken dependencies, **re-run** **`@gh-check`** after fixing README or environment.
+
+## On invoke
+
+*`@gh-push`* — Run steps **1 → 2 → 3** in order. If **`@gh-check`** fails, **stop**—do not commit or push.
+
+## Workflow
+
+### 1. Hand off to **`@gh-check`** (required before §2–3)
+
+> Execute the **entire** Cursor skill **[`@gh-check`](../gh-check/SKILL.md)** — every section, in order. No shortcuts. **This step is the only definition of “green” before commit/push** for the **current workspace** repository.
+
+### 2. Documentation up to date
+
+*`@gh-push`* — Only after §1 succeeded.
+
+Compare README (and any other main docs) to the current repo. Apply minimal edits so documentation accurately describes the project.
+
+- **Lists** (e.g. skills, features, modules) — Match what exists on disk; add, remove, or fix rows.
+- **Setup / usage** — Update if scripts, commands, or paths changed.
+- **Structure** — Adjust if the doc describes dirs or key files that no longer match.
+- Only change what is wrong or outdated; no style-only rewrites.
+
+### 3. Commit (if needed) and publish
+
+*`@gh-push`* — Only after §1 succeeded. Includes `git push` / `git push -u` only as below.
+
+- **Clean temp dirs** — Remove any temporary output dirs that should not be committed (e.g. temp dirs from url fetch runs). Use a random temp path for any one-off output during this run, then delete it so the working tree has no leftover temp dirs.
+
+- **If there are changes to commit** (`git status` not clean after step 2):
+  - **Stage** — default to adding only the paths changed by the workflow/docs updates (`git add <path...>`). Use `git add .` only if the change list is very broad or the user explicitly asks for that behavior.
+  - **Message** — One short line summarizing the change (e.g. from `git diff --stat` or a brief summary).
+  - **Commit** — `git commit -m "<summary>"`.
+
+- **Publish** (after successful **`@gh-check`** in §1; after commit when one was made, or when the tree was already clean after §2):
+  - `BRANCH=$(git branch --show-current)`; fail if detached.
+  - If upstream is configured and the branch is **ahead** of `@{u}`: `git push`.
+  - Else if **no upstream** (`git rev-parse @{u}` fails): `git push -u origin "$BRANCH"` so the remote branch exists (including a new branch that only exists locally).
+  - Else if not ahead and upstream exists: report branch is already published (nothing to push).
+  - If push fails (permissions, protected branch), report the error; do not force-push unless the user explicitly asks.
+
+## Notes
+
+*`@gh-push`*
+- Run from the repo root.
+- If the tree is clean and docs are already accurate, §2 may be a no-op; **Publish** still runs when the branch is ahead (merge commits, new branches).
+- After a successful push, to open or refresh a PR → invoke **`@gh-pr`** ( **`@gh-pull`** then **`@gh-push`** then PR metadata—run the skill in order).

@@ -1,0 +1,43 @@
+# CI: install script deps, run the full Node test suite under scripts/, enforce line coverage.
+# Skills markdown is validated by skills-validate inside npm test (frontmatter + research rules).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scripts:
+    name: Scripts — unit tests & coverage
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: scripts
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js (LTS)
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: scripts/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests (unit, validators, skill installer integration)
+        run: npm test
+
+      - name: Line coverage (≥90%)
+        run: npm run test:coverage:check
