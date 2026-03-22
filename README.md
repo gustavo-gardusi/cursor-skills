@@ -1,103 +1,93 @@
 # Cursor Skills
 
-[![Tests](https://img.shields.io/badge/tests-146%20passing-brightgreen?style=for-the-badge)](scripts/)
-[![Coverage](https://img.shields.io/badge/coverage-%E2%89%A590%25-brightgreen?style=for-the-badge)](scripts/)
-
-Markdown instructions the Cursor agent follows (e.g. add context from URLs, create a PR, execute a plan). **Use in Cursor chat:** **`/skill-name`** or **`@skill-name`** (same picker; tables below use **`/`** for readability).
+Markdown instructions the Cursor agent follows (e.g., orchestrating browser research, creating a PR, building a plan). Use in Cursor chat: **`@skill-name`** or **`/skill-name`** (same picker).
 
 ---
 
-## Quick links
+## Quickstart & Installation
 
-| You want to… | See |
-|--------------|-----|
-| **Set up on macOS (M chip)** | [Setup](#setup-macos-m-chip) |
-| **Context skills** | [Context skills](#context-skills) |
-| **GitHub skills** | [GitHub skills](#github-skills) |
-| **Sync, url scripts, Chrome, coverage** | [scripts/README.md](scripts/README.md) |
-| **Run tests** (unit + integration) | [Tests](#tests) |
+Since this repository uses a **skills-only architecture**, there are no `npm install` steps or scripts to build. You just need to tell Cursor where to find the `skills/` directory.
 
-## Repo structure and purpose
+### Option 1: Automatic via Cursor (If supported)
+1. Open Cursor Settings
+2. Navigate to Features > Agent > Skills
+3. Add this repository URL
 
-- **`skills/`** — Run in Cursor as **`/…`** skills (agent instructions and orchestration).
-- **`scripts/`** — Sync, fetch, context helpers, tests, CI. Prefer invoking **skills** in chat over calling these CLIs yourself when a skill covers the task.
-- **`.github/`** — CI for script tests and coverage.
+### Option 2: Manual Sync (Recommended)
+Run this one-liner from any terminal to sync the latest skills to your Cursor profile:
+```bash
+mkdir -p ~/.cursor/skills-cursor && cp -r /path/to/your/clone/cursor-skills/skills/* ~/.cursor/skills-cursor/
+```
 
----
-
-## Setup (macOS, M chip)
-
-Works on Apple Silicon with **Node.js LTS** (ARM64). No global install; dependencies live under `scripts/`.
-
-1. **Clone** (from repo root from here on):
-   ```bash
-   git clone https://github.com/gustavogardusi/cursor-skills.git && cd cursor-skills
-   ```
-2. **Install script deps (for sync / tests):**  
-   `npm install --prefix scripts`
-3. **Install skills into Cursor:**  
-   `node scripts/skills/sync.js in`  
-   Use `in -y` to clear existing skills first. Sync replaces placeholders (e.g. `{{base:scripts/url}}`) with this repo’s path so skills work from any workspace. **After editing a skill in this repo, run `in` again** so `~/.cursor/skills-cursor/` stays current.
-4. **Optional — research flow with Chrome:**  
-   **`/context-add`** starts the required browser session. Profile and url tooling: [scripts/README.md](scripts/README.md).
-
-**Result:** Skills live in `~/.cursor/skills-cursor/`. Use **`/skill-name`** from any project workspace.
+**Setup Alias:**
+To make it easy to update in the future, add this to your `~/.zshrc` or `~/.bashrc`:
+```bash
+alias sync-cursor-skills="cp -r ~/github/personal/cursor-skills/skills/* ~/.cursor/skills-cursor/"
+```
+Then whenever you pull changes, just run `sync-cursor-skills`.
 
 ---
 
-## Using skills in the agent
+## What's This?
 
-In **Cursor chat**, invoke a skill so the agent loads it. Skills are the supported interface for day-to-day work; **`scripts/`** is for sync, tests, and contributing.
+This repository provides reusable skills for the Cursor agent.
 
-**Research flow (context):** **`/context-add`** → **`/context-plan`** → **`/context-show`** or **`/context-execute`**; **`/context-clear`** resets context files. Context data under `.cursor/` is **per-repo**.
+- **`skills/`**: Public, user-facing skills (e.g., `@context-add`, `@gh-pr`).
+- **`skills/internal/`**: Internal utilities organized by domain (e.g., `context/`, `gh/`). Called by public skills; not meant for direct use.
+
+For deep technical details, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ---
 
-## Context skills
+## Public Skills Directory
+
+### Context Research (Exploration Flow)
 
 Located in **`skills/context/`**.
 
 | Skill | What it does |
 |-------|----------------|
-| `/context-add` | Shared-profile browser session; validate pages; fetch from URLs with Chrome and extract links (e.g. GitHub repo/PR/Actions, Jira, Slack web). Writes `.cursor/research-context.json`—only this skill may change that file. |
-| `/context-show` | Summarize context (count, lastFetched, URLs). Read-only. |
-| `/context-clear` | Clear `.cursor/research-context.json` and `.cursor/research-visited.txt`. |
-| `/context-plan` | Read context + repo (read-only); write `.cursor/research-plan.md` (research, PR review, failing tests, codebase alignment). |
-| `/context-execute` | Read the plan and apply changes to the repo. |
+| `@context-add` | Start interactive browser session. Opens Firefox, listens to all tabs, and provides real-time chat recommendations as you navigate. |
+| `@context-show` | Show intelligence report: queue preview, visited count, confidence level, and current context summary. |
+| `@context-plan` | Interactive strategy builder. Uses Q&A to analyze findings and output a concrete plan. |
+| `@context-clear` | Show summary, then clear per-repo context/queue (keeps global snapshots). |
 
----
-
-## GitHub skills
+### GitHub Workflow
 
 Located in **`skills/gh/`**.
 
-| Skill | What it does | Dependency graph |
-|-------|----------------|------------------|
-| `/gh-check` | Figures out how the project expects to be built and tested, installs what’s needed, then runs format/lint/tests. Stops if anything fails—no commit or push. | — |
-| `/gh-reset` | Stays on the **current** branch; **no stash**—if the tree is dirty, **stop** or **confirm trash** (discard all local changes). Then dry-run **`git clean`**, confirm **reset** and **clean**, and optional non-git purges. | — |
-| `/gh-pull` | Fetches and merges the branch’s upstream and the repo’s canonical `main` into the current branch; resolves merge conflicts. Does not push. | — |
-| `/gh-push` | Runs the full verify pass, aligns main docs if needed, commits when there are changes, then pushes the current branch (or sets upstream on first push). | `/gh-check` |
-| `/gh-main` | Checks out `main`, resets it to match remote, and merges the latest canonical `main`—all **local**; you publish `main` separately if you want it on the remote. | `/gh-reset` → `/gh-pull` |
-| `/gh-start` | Refreshes local `main`, creates a **new branch** from it (name from ticket/issue/task), and **publishes** that branch to the remote. | `/gh-main` → `/gh-push` |
-| `/gh-pr` | Publishes current work the same way as push, then **creates or updates** the GitHub PR (title/body). Does not merge. | `/gh-push` |
-
-**Orchestrators** (non-empty dependency graph): **`/gh-start`**, **`/gh-main`**, **`/gh-push`**, **`/gh-pr`**. **Leaf** (graph `—`): **`/gh-check`**, **`/gh-reset`**, **`/gh-pull`**.
+| Skill | What it does |
+|-------|----------------|
+| `@gh-start` | Sync `main`, create a new branch from a ticket/issue, and publish it. |
+| `@gh-pr` | Run full check/push cycle, then create or update a GitHub PR from diff. |
+| `@gh-check` | Run format, lint, and test suites. Stops if anything fails. |
 
 ---
 
-## Tests
+## Recommended Models by Task
 
-Tests live under **`scripts/`** and use **mocks only** (no real Chrome or network). From **repo root**:
+When invoking skills, consider these models for optimal results. Skills inherit your default model; these are suggestions to optimize cost vs. quality.
 
-| Command | What it does |
-|---------|----------------|
-| `npm test --prefix scripts` | Run all tests (sync, skills-validate, url) |
-| `npm run test:skills --prefix scripts` | Sync + skills validation only |
-| `npm run test:url --prefix scripts` | Url scripts (fetch, interactive, visited, link-filter) only |
-| `npm run test:context --prefix scripts` | Context integration (clear → append → show → clear) |
-| `npm run test:coverage --prefix scripts` | All tests with line/branch/function coverage |
-| `npm run test:coverage:check --prefix scripts` | Fail if line coverage is below 90% |
+| Task | Recommended Model | Why |
+|------|-------------------|-----|
+| **Planning & Strategy** (`@context-plan`) | `claude-sonnet-4.5` (with reasoning) | Iterative reasoning, multi-phase analysis |
+| **Code Review & Refactoring** | `claude-sonnet-4.5` (with reasoning) | Deep code understanding and explanation |
+| **General Coding** | `gemini-3.1-pro` | Excellent code generation, versatile |
+| **Interactive Exploration** (`@context-add`) | `composer-2` | Fast real-time responsiveness while navigating |
+| **Fast Decisions / Q&A** | `claude-haiku-4.5` | Quick answers, low cost |
 
-**Integration-style tests:** (1) The sync suite includes an **“install locally”** test: it runs `run(['in', '-y'])` with a temp `CURSOR_DIR`, installs from the real repo `skills/`, and asserts that the installed **context-add** skill has `{{base:...}}` resolved. (2) The **context** suite runs clear → append → show → clear and visited-file. Run everything with `npm test --prefix scripts`.
+---
 
-CI runs tests and the coverage check on push/PR to `main` (see [.github/workflows/ci.yml](.github/workflows/ci.yml)). More detail: [scripts/README.md](scripts/README.md) (Tests and coverage).
+## Storage Model: Global vs Per-Repo
+
+This project uses a hybrid storage model to maximize efficiency:
+
+**Global (shared across all repos)**:
+- `$HOME/.cursor/browser-profiles/` — Shared Firefox profile + page snapshots.
+- Keeps you logged in across all projects.
+- Deduplicates page fetches (if you view a PR in Repo A, Repo B can reuse the text snapshot).
+
+**Per-Repository (in `.cursor/` of each repo)**:
+- `.cursor/research-queue.json` — Next links to explore for this specific project.
+- `.cursor/research-context.json` — Destination pages found in this project's exploration.
+- `.cursor/research-plan.json` / `.md` — Strategy and findings.
