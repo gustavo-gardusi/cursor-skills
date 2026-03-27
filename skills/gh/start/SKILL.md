@@ -1,18 +1,20 @@
 ---
 name: gh-start
 description: >-
-  Sync main, create a new branch from a ticket or activity,
-  and optionally push to remote.
+  Move to main and integrate it, create a new branch from task context, then
+  optionally publish via gh-push.
 ---
 
 # Start (New Branch)
 
-**Cursor skill:** **`@gh-start`** — Invoked with **`@gh-start`** in Cursor. 
+**Cursor skill:** **`@gh-start`**
 
-**Depends on:**
-- **`@gh-main-sync`** (internal utility to clean and sync main)
+## Unique ownership
 
-**Responsibility:** Derive a branch name from a Jira ticket, GitHub issue, or activity; sync `main`; create the new branch.
+- `@gh-start` owns branch creation flow.
+- `@gh-main` owns moving to/integrating `main`.
+- `@gh-push` owns publish operations.
+- `@gh-reset` is the only reset/clean owner (invoked via `@gh-main` when needed).
 
 ## Workflow
 
@@ -21,11 +23,13 @@ description: >-
    - GH Issue: `#42` → `42-fix-login`
    - Activity: "add login" → `add-login`
 
-2. **Sync Main**: Run internal utility **`@gh-main-sync`** to ensure local main is up-to-date and clean.
+2. **Sync Main**: Run full **[`@gh-main`](../main/SKILL.md)** to switch to `main`, fetch remotes, and integrate canonical `main`.
 
 3. **Create Branch**: `git checkout -b "$BRANCH"`
 
-4. **Publish**: Unless user asked not to, run `git push -u origin HEAD` to publish the new branch immediately.
+4. **Publish (optional)**:
+   - If user asked to publish now, run full **[`@gh-push`](../push/SKILL.md)**.
+   - If user did not ask to publish, stop after local branch creation.
 
 ## Branch name examples
 

@@ -1,36 +1,38 @@
 ---
 name: gh-pr
 description: >-
-  Run gh-push first (check, docs, commit, push), then resolve open PR by head,
-  diff vs base, write title/body from diff, edit or create. No merge.
+  Publish branch through gh-push, then create or update PR metadata from branch
+  diff against base.
 ---
 
 # PR
 
-**Cursor skill:** **`@gh-pr`** — Invoked with **`@gh-pr`** in Cursor.
+**Cursor skill:** **`@gh-pr`**
 
-**Depends on:** 
-- **`@gh-check`** (runs before any code changes)
-- **`@gh-pull-merge`** (internal utility, used if sync needed)
+## Unique ownership
 
-**Sole purpose:** (1) Ensure branch is checked. (2) Resolve an open PR for this head/base if one exists. (3) Fetch the real base ref, diff `base...HEAD`, write title and body. (4) `gh pr edit` or `gh pr create`.
+- `@gh-pr` owns PR create/update metadata.
+- `@gh-push` owns verify/commit/push before PR operations.
+- `@gh-check` stays verify-only and is not duplicated here.
+- Reset/clean behavior is owned only by `@gh-reset`.
 
 ## Workflow
 
-1. **Verify State**: Ask user if code is ready to PR.
-2. **Checks**: Run **`@gh-check`**. If it fails, stop.
-3. **Commit & Push**: Commit any final changes. Push to remote (`git push -u origin HEAD`).
-4. **Resolve existing open PR**: Check if PR already exists for this branch.
-5. **Diff & Write**: Fetch base ref (`main` or `upstream/main`), diff vs `HEAD`, and write a strong title/body.
-6. **Create/Edit**: Run `gh pr create` or `gh pr edit` using the generated text.
+1. **Publish branch first**: Run full **[`@gh-push`](../push/SKILL.md)**.
+2. **Resolve existing open PR**: Check whether a PR already exists for current head branch.
+3. **Choose base and diff**: Resolve base (`main` or canonical repo base), inspect `base...HEAD`.
+4. **Write PR content**: Generate title/body from real branch delta.
+5. **Create or edit PR**:
+   - existing PR: `gh pr edit`
+   - no existing PR: `gh pr create`
 
 ## PR Description Format
 
 ### Structure
-1. **✨ Summary** — Bullet points. Bold main outcomes.
-2. **📊 Impact** — *Optional*. Omit if no runtime impact.
-3. **📁 Changes** — Brief Added / Modified / Deleted.
+1. **Summary** — concise bullets focused on behavior and reviewer impact.
+2. **Impact** — optional, when behavior/runtime implications exist.
+3. **Test plan** — how reviewer can validate.
 
 ### Rules
-- Emoji in body only; `--title` is plain text.
-- Focus on behavior and tree changes reviewers must see.
+- Keep title plain text.
+- Keep body focused on intent and externally visible changes.

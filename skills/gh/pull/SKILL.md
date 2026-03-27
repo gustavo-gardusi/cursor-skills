@@ -110,4 +110,5 @@ Then continue from the step that triggered the conflict.
 *`@gh-pull`*
 - Run from project root. Use **merge** (not rebase). Abort: `git merge --abort`.
 - **Stages:** For conflict inspection, `git ls-files -u`. Incoming from merged branch is often **stage 3** (`git show :3:path`) when merging `ROOT_BRANCH` into HEAD—verify per conflict.
-- To reset **local `main`** to the **canonical remote tip** (**`upstream/main`** if **`upstream`** exists, else **`origin/main`**), use **`@gh-main`** (single fetch, **`reset --hard`**, **`git clean`**) instead of **`@gh-pull`** alone. To **publish** **`main`**, run **`@gh-push`** after **`@gh-main`**.
+- This skill does not own reset/clean behavior; use **`@gh-reset`** for destructive cleanup/alignment.
+- For `main` sync/integration flow, use **`@gh-main`**. To publish, run **`@gh-push`** after sync.

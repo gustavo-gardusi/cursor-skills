@@ -14,6 +14,15 @@ description: >-
 
 **Responsibility:** On the **current branch only**—**do not** `git checkout` elsewhere. **No `git stash`:** local work is either **left alone** (you **stop** the skill) or **destroyed** by **`git reset --hard`** + **`git clean`** after explicit user confirmation. (1) **Fetch** and resolve **`$TARGET`**. (2) If the tree is **dirty**, require a **binary choice** before continuing (see §5). (3) **Scan** the repo for common build/cache signals. (4) **Confirm** **`git reset --hard`**, then **`git clean`** (after **`git clean -fdxn`** dry-run), then **each** optional non-git command. (5) Execute. This skill **does not** manage stash lists, drops, or prunes.
 
+## Canonical ownership
+
+`@gh-reset` is the **only** gh skill that defines or executes reset/clean behavior:
+- `git reset --hard`
+- `git clean` and its dry-runs
+- destructive cleanup previews and confirmations
+
+Other gh skills must delegate here and must not duplicate reset/clean logic.
+
 **Not for:** merging **`main`** or publishing—use **`@gh-pull`**, **`@gh-push`**.
 
 ## On invoke

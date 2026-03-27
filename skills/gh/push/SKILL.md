@@ -11,11 +11,11 @@ description: >-
 
 **Responsibility (only this skill):** This file is the **only** place that defines **verify → then commit/push**. (1) Run **full** **`@gh-check`** (**[`@gh-check`](../check/SKILL.md)**) before any staging, commit, or push. (2) Align main docs if needed. (3) **Commit** when the tree needs it. (4) **`git push`** / **`git push -u`**. No other skill runs **`git push`**.
 
-**Does not do:** merges (**[`@gh-pull`](../pull/SKILL.md)**), new branches (**[`@gh-start`](../start/SKILL.md)**), hard reset (**[`@gh-reset`](../reset/SKILL.md)**), PR text (**[`@gh-pr`](../pr/SKILL.md)**), or any **`npm test` / `cargo fmt` / lint**—that is only **`@gh-check`**.
+**Does not do:** merges (**[`@gh-pull`](../pull/SKILL.md)**), moving/syncing `main` (**[`@gh-main`](../main/SKILL.md)**), destructive cleanup (**[`@gh-reset`](../reset/SKILL.md)**), or PR metadata (**[`@gh-pr`](../pr/SKILL.md)**). Verification commands live only in **`@gh-check`**.
 
 **When another skill “publishes”:** **`@gh-start`** runs **this** skill **after** **`@gh-main`** and **`git checkout -b`** (new branch). **`@gh-pr`** runs **this** skill **first** (verify, commit, push), then PR metadata. **`@gh-main`** and **`@gh-pull`** do **not** invoke **`@gh-push`**. For **verify without push**, use **`@gh-check`** alone.
 
-### Invariant (canonical; do not copy elsewhere)
+### Invariant (canonical)
 
 **Never** `git add`, **`git commit`**, or **`git push`** until **§1** — the **complete** **`@gh-check`** skill — has **succeeded**. On failure, stop. If failure looks like missing or broken dependencies, **re-run** **`@gh-check`** after fixing README or environment (that skill maps installs before lint/test).
 
@@ -29,7 +29,7 @@ description: >-
 
 > Execute the **entire** Cursor skill **[`@gh-check`](../check/SKILL.md)** — every section, in order. No shortcuts. **This step is the only definition of “green” before commit/push** for this repo workflow.
 
-### 2. Documentation up to date
+### 2. Documentation up to date (optional and minimal)
 
 *`@gh-push`* — Only after §1 succeeded.
 
@@ -43,8 +43,6 @@ Compare README (and any other main docs) to the current repo. Apply minimal edit
 ### 3. Commit (if needed) and publish
 
 *`@gh-push`* — Only after §1 succeeded. Includes `git push` / `git push -u` only as below.
-
-- **Clean temp dirs** — Remove any temporary output dirs that should not be committed (e.g. temp dirs from url fetch runs). Use a random temp path for any one-off output during this run, then delete it so the working tree has no leftover temp dirs.
 
 - **If there are changes to commit** (`git status` not clean after step 2):
   - **Stage** — default to adding only the paths changed by the workflow/docs updates (`git add <path...>`). Use `git add .` only if the change list is very broad or the user explicitly asks for that behavior.

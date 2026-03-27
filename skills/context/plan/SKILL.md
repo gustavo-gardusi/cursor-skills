@@ -1,32 +1,34 @@
 ---
 name: context-plan
-description: Interactive strategy builder. Analyzes findings and suggests next steps via Q&A.
+description: Build or update `.cursor/research-plan.md` from local context notes.
 ---
 
 # Context: Plan (Strategy Builder)
 
 **Cursor skill:** **`@context-plan`**
 
-An interactive, multi-phase analysis tool that builds a clear strategy from your research context.
-
-**Recommendation**: Use a model with strong reasoning capabilities for this skill, such as `claude-sonnet-4.5`.
+Builds a concrete implementation strategy for the current project from local context notes.
 
 ## Interactive Flow
 
-1. **Analyze State**: The skill reads `.cursor/research-context.json` and `.cursor/research-queue.json`.
-2. **Q&A Loop**: It will ask you a series of clarifying questions (usually 3-5 rounds) to build the strategy:
-   - What is the primary exploration goal?
-   - What key information have we found so far?
-   - What critical pieces are still missing?
-   - Should we prioritize specific URL types next?
-3. **Draft Strategy**: It drafts a recommended path forward.
-4. **Refine**: You can ask to refine or adjust the strategy.
-5. **Output**: Once confirmed, it writes the strategy to:
-   - `.cursor/research-plan.json` (structured data)
-   - `.cursor/research-plan.md` (human-readable summary)
+1. Read `.cursor/research-context.md`.
+2. Read relevant repository files in read-only mode.
+3. Identify repo-specific goals, constraints, and impacted areas.
+4. Draft or update `.cursor/research-plan.md` with actionable chunks.
+5. Keep the plan concise, ordered, and directly executable.
+
+## Plan format
+
+Use this structure in `.cursor/research-plan.md`:
+- `## Relation to repo`
+- `## Impact summary`
+- `## Implementation plan`
+  - `### Chunk N: <label>`
+  - `Run / one-off:`
+  - `Add / change:`
+  - `Update / wire:`
 
 ## When to use
 
-- After a long `@context-add` exploration session.
-- When you are stuck and need to synthesize what you've found.
-- Before starting to code, to ensure all requirements are gathered.
+- After adding enough project context with `@context-add`.
+- Before implementation to reduce ambiguity and drift.
