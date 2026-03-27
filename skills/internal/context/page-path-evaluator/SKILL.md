@@ -1,5 +1,5 @@
 ---
-name: internal-context-page-path-evaluator
+name: page-path-evaluator
 description: Evaluate page snapshots, score relevance against exploration goals, and recommend next links.
 visibility: internal
 ---

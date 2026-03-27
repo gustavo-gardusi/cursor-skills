@@ -8,16 +8,16 @@ This repository uses a **skills-only architecture**. There are no Node.js script
 
 We strictly separate public, user-facing skills from internal utilities:
 
-- **Public (`skills/context/`, `skills/gh/`)**: Simple, orchestrating skills meant to be invoked directly by the user (e.g., `@context-browse`).
+- **Public (`skills/context/`, `skills/gh/`)**: Simple, orchestrating skills meant to be invoked directly by the user (e.g., `@context-add`).
 - **Internal (`skills/internal/`)**: Small, single-purpose utility skills organized by domain. These are called by public skills to perform specific tasks (e.g., evaluating a page, checking visited status).
 
 ### 2. Sub-Skill Orchestration Model
 
-Instead of writing massive 500-line skill files, complex operations are broken down into sub-skills. For example, when `@context-browse` runs, it sequentially invokes:
+Instead of writing massive 500-line skill files, complex operations are broken down into sub-skills. For example, when `@context-add` runs, it sequentially invokes:
 1. `browser-navigator`
 2. `snapshot-save`
 3. `page-path-evaluator`
-4. `@context-add`
+4. `queue-modify`
 
 This ensures skills remain readable, maintainable, and highly reusable.
 
@@ -31,7 +31,7 @@ The crown jewel of this architecture is the real-time exploratory context flow.
 Traditional search requires knowing exactly what you're looking for. Codebases and enterprise environments (GitHub PRs + Jira + Slack) require *exploration*—clicking links, reading context, and pivoting based on findings.
 
 ### The Solution: CDP Listening
-When you run `@context-browse <url>`, it does **not** just fetch that URL and stop.
+When you run `@context-add <url>`, it does **not** just fetch that URL and stop.
 
 1. **Browser Launch**: It launches a real Firefox window using your shared global profile (so you are already logged in to your tools).
 2. **Passive Listening**: It attaches to Firefox via CDP (Chrome DevTools Protocol) and listens to **all tabs**.
@@ -57,7 +57,7 @@ Located at `$HOME/.cursor/browser-profiles/`
 - **`Default/`**: The actual Firefox profile directory. Maintains your login sessions across all projects.
 - **`snapshots/metadata.json`**: An index of every URL you've ever visited via the tool.
 - **`snapshots/{hash}.json`**: The actual text extraction of a page. If you open PR #123 in Project A, and later need it in Project B, the snapshot is reused instantly without re-fetching.
-- **`research-visited.txt`**: A simple flat list of URLs to prevent infinite loops in the `queue-modify` skill.
+- **`research-visited.txt`**: A simple flat list of URLs to prevent infinite loops in the queue manager.
 
 ### Per-Repo Storage
 Located at `<project-root>/.cursor/`

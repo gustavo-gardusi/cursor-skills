@@ -1,20 +1,17 @@
 ---
 name: gh-check
 description: >-
-  Sole gh skill for local repo health: discover stack from README/CI, prepare
-  deps, then format, lint, test, build. Other gh-* skills hand off here (or via
-  gh-push §1) for verification.
+  Read READMEs and repo config to infer languages and required tooling; prepare
+  the repo (install/build); then format, lint (clippy / ruff or flake8), test.
 ---
 
 # Check (discover → prepare → evaluate)
 
-**Cursor skill:** **`@gh-check`** — Invoked with **`@gh-check`** in Cursor. **Three phases:** (1) **Discover** what the **open workspace / git checkout** is and what its docs and config say to install and run. (2) **Prepare** (install/build). (3) **Evaluate** (format, lint, tests)—aligned with that project’s README and CI when possible. No **`git commit`**, no **`git push`**, no doc rewrites for publish—that is **`@gh-push`**.
+**Cursor skill:** **`@gh-check`** — Invoked with **`@gh-check`** in Cursor. **Two phases:** (1) **Discover** what this repo is and what files say you must install/run. (2) **Prepare** (install/build). (3) **Evaluate** (format, lint, tests)—aligned with README and CI when possible. No **`git commit`**, no **`git push`**, no doc rewrites for publish—that is **`@gh-push`**.
 
-**Responsibility (only this skill):** Owns **inventory of languages/tooling from docs + config**, **dependency install**, **build when needed**, and **all** commands that answer “does **this project** work locally?” (format, lint, test, umbrella **`make check`** / **`npm run check`**, etc.). **This file is the single source of truth** for those commands; other **`gh-*`** skills **link here** instead of listing tool commands.
+**Responsibility (only this skill):** Owns **inventory of languages/tooling from docs + config**, **dependency install**, **build when needed**, and **verification commands**. Other skills invoke **this** skill in full—**do not** copy command lists elsewhere.
 
-**Who runs **`@gh-check`:** **`@gh-push`** §1 runs **this skill in full**. **`@gh-start`** reaches checks through **`@gh-push`**. **`@gh-pull`**, **`@gh-main`**, and **`@gh-pr`** focus on git / PR flow—when the tree should be **green**, hand off to **`@gh-check`** or **`@gh-push`**. For verify **without** push, run **`@gh-check`** alone.
-
-**Not for:** git workflows (**`git fetch`**, merge, push, reset)—use **`@gh-pull`**, **`@gh-push`**, **`@gh-main`**, etc.
+**Not for:** git workflows—use other **`gh-*`** skills.
 
 ## On invoke
 
@@ -99,7 +96,7 @@ Execute **in the order README documents**. If undocumented, use **minimal** defa
 
 After **Prepare**, if README or **CI** defines a **single** entry (e.g. `make check`, `npm run check`, `pnpm run validate`, `task check`), run it **first**:
 
-- If it **passes** and clearly covers analysis + tests for **this project**, you may **skip §5–7** unless README/CI also requires **separate** format/lint steps for parity.
+- If it **passes** and clearly covers analysis + tests for this repo, you may **skip §5–7** unless README/CI also requires **separate** format/lint steps for parity.
 - If it **fails**, capture output; fix may be code, config, or incomplete **Prepare**—do not skip reporting the failing command.
 
 ---
@@ -164,6 +161,4 @@ On success, **`@gh-push`** is next when the user wants docs + commit + publish.
 
 *`@gh-check`*
 - If **system** toolchains are missing (`node`, `rustc`, `python3`, `go`), report clearly—the user installs those outside this skill.
-- **`@gh-push`** §1 runs **this entire skill** in order; **`@gh-push`** must **not** add extra **`npm test`**, **`cargo clippy`**, etc. beyond this file.
-- After **`@gh-pull`** or **`@gh-main`**, if the user asks “is it green?”, **run **`@gh-check`** or **`@gh-push`** next**.
-- **`@gh-pr`** PR text **summarizes** verification for reviewers after **`@gh-push`** has run **`@gh-check`**.
+- **`@gh-push`** §1 runs **this entire skill** in order; do not duplicate verify commands in **`@gh-push`**.

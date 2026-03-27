@@ -1,5 +1,5 @@
 ---
-name: internal-context-browser-navigator
+name: browser-navigator
 description: Open Firefox with a shared profile, listen to navigation events via CDP, and auto-capture page snapshots.
 visibility: internal
 ---
@@ -12,11 +12,11 @@ This internal skill manages the Firefox browser lifecycle and DevTools Protocol 
 
 - **Browser**: Firefox (required for open-source nature and clean CDP support)
 - **Profile**: Global shared profile at `$HOME/.cursor/browser-profiles/Default`
-- **Lifecycle**: One window opened per `@context-browse` invocation. Stays open until user manually closes it.
-  
+- **Lifecycle**: One window opened per `@context-add` invocation. Stays open until user manually closes it.
+
 ## Execution Flow
 
-When invoked by `@context-browse`:
+When invoked by `@context-add`:
 
 1. **Launch**:
    - Create profile directory if missing.
@@ -37,23 +37,18 @@ When invoked by `@context-browse`:
    - Extract all `<a>` tags with `href` and `innerText`.
 
 4. **Return Snapshot**:
-   - Save the snapshot `{url, title, text, links}` using `@internal-context-snapshot-save`.
-   - Yield control back to the orchestrator (`@context-browse`).
+   - Save the snapshot `{url, title, text, links}` using `@snapshot-save`.
+   - Yield control back to the orchestrator (`@context-add`).
 
 ### Technical Implementation
 
-You MUST generate a temporary Node.js script (e.g., `.cursor/browser-navigator.js`) and execute it.
-Do NOT fallback to `gh` commands or simple fetches. The browser MUST be visible (`headless: false`).
+The navigator should use `npx -y playwright` directly via a temporary shell script.
 
-Write the embedded script below to `.cursor/browser-navigator.js`:
-
-<!-- EMBED_SCRIPT_START: src/browser-navigator.js -->
-<!-- EMBED_SCRIPT_END -->
-
-To run this:
-1. Write the embedded script to `.cursor/browser-navigator.js`
-2. Run: `npx --yes playwright install firefox && npm i -no-save playwright && node .cursor/browser-navigator.js <optional_url>`
-3. Poll the terminal output to monitor user navigations and capture snapshots.
+```javascript
+// Example Playwright CDP inline script
+const { firefox } = require('playwright');
+// ... launch logic
+```
 
 5. **Termination**:
    - Detect when the Firefox process exits or the main window is closed.

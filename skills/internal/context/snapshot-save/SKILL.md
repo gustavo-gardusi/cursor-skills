@@ -1,5 +1,5 @@
 ---
-name: internal-context-snapshot-save
+name: snapshot-save
 description: Save page snapshots to global storage to avoid re-fetching the same page across different projects.
 visibility: internal
 ---

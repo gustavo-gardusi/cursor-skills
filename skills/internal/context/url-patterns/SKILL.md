@@ -1,5 +1,5 @@
 ---
-name: internal-context-url-patterns
+name: url-patterns
 description: Central registry of URL detection patterns, expected keywords, and extraction rules. Use this skill as a read-only library for classification.
 visibility: internal
 ---

@@ -9,17 +9,15 @@ description: >-
 
 **Cursor skill:** **`@gh-push`** — Invoked with **`@gh-push`** in Cursor. **Core concept:** **publish** the current branch—**commit** if needed, then **`git push`**. Everything before that is: (a) **verification** via **`@gh-check`** only, (b) **optional** minimal doc alignment so README matches the tree.
 
-**Where it runs:** The **current workspace** git repository.
-
 **Responsibility (only this skill):** This file is the **only** place that defines **verify → then commit/push**. (1) Run **full** **`@gh-check`** (**[`@gh-check`](../check/SKILL.md)**) before any staging, commit, or push. (2) Align main docs if needed. (3) **Commit** when the tree needs it. (4) **`git push`** / **`git push -u`**. No other skill runs **`git push`**.
 
-**Does not do:** merges (**[`@gh-pull`](../pull/SKILL.md)**), new branches (**[`@gh-start`](../start/SKILL.md)**), aligning **`main`** to a remote tip (**[`@gh-main`](../main/SKILL.md)**), PR text (**[`@gh-pr`](../pr/SKILL.md)**), or **any** install / format / lint / test / build command **by name**—**[`@gh-check`](../check/SKILL.md)** owns the full matrix; this skill **only** hands off to it in §1.
+**Does not do:** merges (**[`@gh-pull`](../pull/SKILL.md)**), new branches (**[`@gh-start`](../start/SKILL.md)**), hard reset (**[`@gh-reset`](../reset/SKILL.md)**), PR text (**[`@gh-pr`](../pr/SKILL.md)**), or any **`npm test` / `cargo fmt` / lint**—that is only **`@gh-check`**.
 
-**When another skill “publishes”:** **`@gh-start`** runs **this** skill **after** **`@gh-main`** and **`git checkout -b`** (new branch). **`@gh-pr`** runs **[`@gh-pull`](../pull/SKILL.md)** first (merge **`main`**, resolve conflicts), **then** **this** skill (**`@gh-check`** inside §1 → docs → push), then PR metadata. **`@gh-main`** and **`@gh-pull`** alone do **not** invoke **`@gh-push`**. For **verify without push**, use **`@gh-check`** alone.
+**When another skill “publishes”:** **`@gh-start`** runs **this** skill **after** **`@gh-main`** and **`git checkout -b`** (new branch). **`@gh-pr`** runs **this** skill **first** (verify, commit, push), then PR metadata. **`@gh-main`** and **`@gh-pull`** do **not** invoke **`@gh-push`**. For **verify without push**, use **`@gh-check`** alone.
 
 ### Invariant (canonical; do not copy elsewhere)
 
-**Never** `git add`, **`git commit`**, or **`git push`** until **§1** — the **complete** **`@gh-check`** skill — has **succeeded**. On failure, stop. If failure looks like missing or broken dependencies, **re-run** **`@gh-check`** after fixing README or environment.
+**Never** `git add`, **`git commit`**, or **`git push`** until **§1** — the **complete** **`@gh-check`** skill — has **succeeded**. On failure, stop. If failure looks like missing or broken dependencies, **re-run** **`@gh-check`** after fixing README or environment (that skill maps installs before lint/test).
 
 ## On invoke
 
@@ -29,7 +27,7 @@ description: >-
 
 ### 1. Hand off to **`@gh-check`** (required before §2–3)
 
-> Execute the **entire** Cursor skill **[`@gh-check`](../check/SKILL.md)** — every section, in order. No shortcuts. **This step is the only definition of “green” before commit/push** for the **current workspace** repository.
+> Execute the **entire** Cursor skill **[`@gh-check`](../check/SKILL.md)** — every section, in order. No shortcuts. **This step is the only definition of “green” before commit/push** for this repo workflow.
 
 ### 2. Documentation up to date
 
@@ -65,4 +63,4 @@ Compare README (and any other main docs) to the current repo. Apply minimal edit
 *`@gh-push`*
 - Run from the repo root.
 - If the tree is clean and docs are already accurate, §2 may be a no-op; **Publish** still runs when the branch is ahead (merge commits, new branches).
-- After a successful push, to open or refresh a PR → invoke **`@gh-pr`** ( **`@gh-pull`** then **`@gh-push`** then PR metadata—run the skill in order).
+- After a successful push, to open or refresh a PR → invoke **`@gh-pr`** (it runs **`@gh-push`** again first; often a no-op if already clean and pushed).

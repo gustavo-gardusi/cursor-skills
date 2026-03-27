@@ -1,5 +1,5 @@
 ---
-name: internal-context-visited-check
+name: visited-check
 description: Manage the global visited URLs list to prevent infinite exploration loops.
 visibility: internal
 ---

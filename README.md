@@ -1,77 +1,93 @@
 # Cursor Skills
 
-[![Tests](https://img.shields.io/badge/tests-149%20passing-brightgreen?style=for-the-badge)](scripts/README.md#tests-and-coverage)
-[![Coverage](https://img.shields.io/badge/coverage-%E2%89%A590%25-brightgreen?style=for-the-badge)](scripts/README.md#tests-and-coverage)
-
-This repository holds **Cursor skills**: markdown the agent follows for research (URLs), git/PR flows, and planning. In chat, invoke with **`/skill-name`** or **`@skill-name`** (this doc uses **`/`**).
-
-## Quick links
-
-1. [Setup](#setup-macos-m-chip)
-2. [Using skills](#using-skills-in-the-agent)
-3. [Documentation](#documentation)
+Markdown instructions the Cursor agent follows (e.g., orchestrating browser research, creating a PR, building a plan). Use in Cursor chat: **`@skill-name`** or **`/skill-name`** (same picker).
 
 ---
 
-## Setup (macOS, M chip)
+## Quickstart & Installation
 
-Target: **Apple Silicon (ARM64)** with **Node.js LTS**. Dependencies install under **`scripts/`** (no global npm packages required for the basics).
+Since this repository uses a **skills-only architecture**, there are no `npm install` steps or scripts to build. You just need to tell Cursor where to find the `skills/` directory.
 
-1. **Clone**
-   ```bash
-   git clone https://github.com/gustavogardusi/cursor-skills.git && cd cursor-skills
-   ```
-2. **Install script dependencies** (needed for **`sync`**, and for **context/url** skills that run **`fetch.js`** / Playwright from **this** clone):
-   ```bash
-   npm install --prefix scripts
-   ```
-3. **Install skills into Cursor** — copies each **`SKILL.md`** under **`skills/`** into **`~/.cursor/skills-cursor/<name>/`** so they show up in the **`/`** and **`@`** pickers:
-   ```bash
-   node scripts/skills/sync.js in -y
-   ```
-   - **`in -y`** — Clears **`~/.cursor/skills-cursor/`** then copies every skill fresh (no merge prompt).
-   - **`in`** (no **`-y`**) — Merges into an existing install; you may be prompted.
-   - Sync resolves **`{{base:…}}`** to absolute paths in **this** clone and rewrites cross-skill links for the flat install layout.
+### Option 1: Automatic via Cursor (If supported)
+1. Open Cursor Settings
+2. Navigate to Features > Agent > Skills
+3. Add this repository URL
 
-**You’re done when:** step **3** finishes without errors — skills are on disk under **`~/.cursor/skills-cursor/`** and ready for Cursor. If a skill doesn’t appear in chat, restart Cursor once after syncing.
-
-4. **Optional — research with Chrome** — After skills are installed, use **`/context-add`** in a project. Chrome, the fetch CLI, and **`.cursor/`** file layout are described under **Url scripts** in **Scripts** (see [Documentation](#documentation)).
-
-**Using installed skills:** Open **any** git repository as the Cursor workspace. Run **`/context-add`**, **`/gh-push`**, and the rest against **that** project; the agent reads and writes git and **`.cursor/`** there—not inside the cursor-skills repo unless that repo is the workspace.
-
----
-
-## Using skills in the agent
-
-Open the **target repository** as the Cursor project (git + **`.cursor/`** live there). Invoke skills with **`/`** or **`@`**.
-
-**Ways to use them** (mix and match; not only “ship a feature”):
-
-- **End-to-end branch + PR** — see the diagram below (**`/gh-start`** → optional **context** loop → **`/gh-pr`**).
-- **Verify the open repo** — **`/gh-check`** (format / lint / test from README + CI); no commit or push.
-- **Publish the current branch** — **`/gh-push`** (runs **`/gh-check`**, then commit if needed, then **`git push`**).
-- **Integrate latest `main`** into your branch — **`/gh-pull`** (fetch + merges; resolve conflicts there, then **`/gh-push`** or **`/gh-check`** when you want green + remote).
-- **Reset local `main` to the remote tip** — **`/gh-main`** (then branch or **`/gh-push`** as needed).
-- **Browser research + captured pages** — **`/context-add`** (writes **`.cursor/research-context.json`**); **`/context-show`** (read-only summary); **`/context-clear`** (reset context/visited).
-- **Plan from context + repo, then implement** — **`/context-plan`** (writes **`.cursor/research-plan.md`**) → **`/context-execute`** (applies the plan to the repo; use **`/gh-push`** / **`/gh-pr`** when you want git publish/PR).
-
-Full names, chains, and edge cases: **Skills reference** in [Documentation](#documentation) below.
-
-**Diagram — one common arc (feature work → PR):**
-
-```text
-   /gh-start              context (*)                 /gh-pr
- ┌────────────┐         ┌────────────┐         ┌────────────┐
- │ new branch │   ──▶   │  optional  │   ──▶   │ merge main │
- │ from main  │         │    loop    │         │ verify+PR  │
- └────────────┘         └────────────┘         └────────────┘
-                               │
-                          (*) repeat
+### Option 2: Manual Sync (Recommended)
+Run this one-liner from any terminal to sync the latest skills to your Cursor profile:
+```bash
+mkdir -p ~/.cursor/skills-cursor && cp -r /path/to/your/clone/cursor-skills/skills/* ~/.cursor/skills-cursor/
 ```
 
+**Setup Alias:**
+To make it easy to update in the future, add this to your `~/.zshrc` or `~/.bashrc`:
+```bash
+alias sync-cursor-skills="cp -r ~/github/personal/cursor-skills/skills/* ~/.cursor/skills-cursor/"
+```
+Then whenever you pull changes, just run `sync-cursor-skills`.
+
 ---
 
-## Documentation
+## What's This?
 
-- **[Skills reference](skills/README.md)** — Every skill, handoff table, typical **start → context → pr** flow, and smaller slices.
-- **[Scripts](scripts/README.md)** — Clone setup for **`scripts/`**, **`sync`**, URL/context CLIs, tests, coverage, fixture regen, and GitHub Actions.
+This repository provides reusable skills for the Cursor agent.
+
+- **`skills/`**: Public, user-facing skills (e.g., `@context-add`, `@gh-pr`).
+- **`skills/internal/`**: Internal utilities organized by domain (e.g., `context/`, `gh/`). Called by public skills; not meant for direct use.
+
+For deep technical details, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+---
+
+## Public Skills Directory
+
+### Context Research (Exploration Flow)
+
+Located in **`skills/context/`**.
+
+| Skill | What it does |
+|-------|----------------|
+| `@context-add` | Start interactive browser session. Opens Firefox, listens to all tabs, and provides real-time chat recommendations as you navigate. |
+| `@context-show` | Show intelligence report: queue preview, visited count, confidence level, and current context summary. |
+| `@context-plan` | Interactive strategy builder. Uses Q&A to analyze findings and output a concrete plan. |
+| `@context-clear` | Show summary, then clear per-repo context/queue (keeps global snapshots). |
+
+### GitHub Workflow
+
+Located in **`skills/gh/`**.
+
+| Skill | What it does |
+|-------|----------------|
+| `@gh-start` | Sync `main`, create a new branch from a ticket/issue, and publish it. |
+| `@gh-pr` | Run full check/push cycle, then create or update a GitHub PR from diff. |
+| `@gh-check` | Run format, lint, and test suites. Stops if anything fails. |
+
+---
+
+## Recommended Models by Task
+
+When invoking skills, consider these models for optimal results. Skills inherit your default model; these are suggestions to optimize cost vs. quality.
+
+| Task | Recommended Model | Why |
+|------|-------------------|-----|
+| **Planning & Strategy** (`@context-plan`) | `claude-sonnet-4.5` (with reasoning) | Iterative reasoning, multi-phase analysis |
+| **Code Review & Refactoring** | `claude-sonnet-4.5` (with reasoning) | Deep code understanding and explanation |
+| **General Coding** | `gemini-3.1-pro` | Excellent code generation, versatile |
+| **Interactive Exploration** (`@context-add`) | `composer-2` | Fast real-time responsiveness while navigating |
+| **Fast Decisions / Q&A** | `claude-haiku-4.5` | Quick answers, low cost |
+
+---
+
+## Storage Model: Global vs Per-Repo
+
+This project uses a hybrid storage model to maximize efficiency:
+
+**Global (shared across all repos)**:
+- `$HOME/.cursor/browser-profiles/` — Shared Firefox profile + page snapshots.
+- Keeps you logged in across all projects.
+- Deduplicates page fetches (if you view a PR in Repo A, Repo B can reuse the text snapshot).
+
+**Per-Repository (in `.cursor/` of each repo)**:
+- `.cursor/research-queue.json` — Next links to explore for this specific project.
+- `.cursor/research-context.json` — Destination pages found in this project's exploration.
+- `.cursor/research-plan.json` / `.md` — Strategy and findings.

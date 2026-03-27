@@ -13,6 +13,3 @@ scripts/lf-fetch-*/
 .cursor/
 # Context integration test temp dirs
 scripts/context/.tmp/
-scripts/coverage/
-tests/test-repo/
-tests/test-repo-remote.git/
