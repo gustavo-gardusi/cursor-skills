@@ -256,6 +256,7 @@ If the old opening **only** restates the title, **replace** with **TL;DR + neste
    - **If “no”:** Re-run **§6** commands; rewrite.
 
 Only after **three passes** call **`gh pr edit`** / **`gh pr create`**.
+*(Note: Exclude any automatic footers like "Made with Cursor" that might be injected by default.)*
 
 ### Title (**plain text only — no emoji**)
 
@@ -319,7 +320,7 @@ Breaking changes, migrations, **merge-risk**—omit if none.
 **7. ✨ Extras**  
 *Optional.* Minor wins.
 
-**Do not include:** **How to verify** / command checklists (**`@gh-check`** ran in **`@gh-push`**). **Do not** paste **commit counts**, **base/HEAD** tables, or a **review route** section.
+**Do not include:** **How to verify** / command checklists (**`@gh-check`** ran in **`@gh-push`**). **Do not** paste **commit counts**, **base/HEAD** tables, or a **review route** section. **Remove any automatic signatures like "Made with Cursor"**.
 
 **When §5 template exists:** **Map** content into the template’s headings; **keep** **TL;DR** (or equivalent) **high**; **fold** nested “what changed” into the template’s description sections if needed. **Still** satisfy **§6** full-branch coverage inside those headings.
 

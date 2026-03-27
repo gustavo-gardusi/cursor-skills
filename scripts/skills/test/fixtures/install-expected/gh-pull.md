@@ -18,6 +18,7 @@ description: >-
 Does **not** create or update PRs (use **`@gh-pr`**).
 
 **Conflict principle (short):**
+- **Never blindly checkout sides** — Read conflict markers manually (e.g. `<<<<<<<`), especially in manifests like `package.json`, `Cargo.toml`, or `.gitignore`, where both sides' additions often need to be preserved together. Avoid scripts like `git checkout --theirs` which silently wipe out branch additions.
 - **Accept what main brought** — Take the incoming side for shared files and upstream behavior unless a small, local tweak is required for the branch to compile or meet its goal.
 - **Avoid large rewrites of “main” code** — Do not replace big upstream blocks with older branch versions to “win” the merge. Reconcile by keeping upstream structure and adjusting **branch additions** (new code, feature modules, tests) to fit.
 - **Branch goal** — After merging, the feature or fix this branch exists for should still be achievable; adapt call sites, imports, and branch-only logic—not revert upstream refactors wholesale.
@@ -85,6 +86,7 @@ When any merge leaves unmerged paths:
 2. **List conflicted files** — `git diff --name-only --diff-filter=U` (or `git status`).
 
 3. **Resolve each conflict** (merge *into* current branch: **ours** = current branch, **theirs** = the ref being merged, e.g. root/main):
+   - **Read the files first** to see the conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`). **Never** blindly run `git checkout --theirs` or `git checkout --ours` across all files, especially for manifests (`package.json`, `.gitignore`, `Cargo.toml`), as you will silently overwrite your branch's new dependencies or configuration additions.
    - **Default to incoming (theirs)** for overlapping regions in files that **main/root** owns (shared modules, config patterns, APIs updated upstream). Prefer their version, then fix **branch-only** breakages (imports, types, tests) in the smallest follow-up edits.
    - **Adapt branch code** — For files that are mostly **branch work**, keep branch intent but align with new upstream APIs and file layout (move code, update signatures) rather than restoring pre-merge branch snapshots of upstream files.
    - **Remove conflict markers** and leave one coherent result. **Do not** mass-reformat or restyle upstream code to match the branch; keep upstream formatting when you kept their side.
