@@ -1,18 +1,24 @@
 ---
 name: context-show
-description: Show a concise summary from local `.cursor/research-context.md`.
+description: Show a concise summary from local context artifacts.
 ---
 
-# Context: Show (Local Summary)
+# Review Context
 
 **Cursor skill:** **`@context-show`**
 
-Read-only summary of the current repository context data.
+## Mode
+
+Plan mode only.
+
+## Role
+
+Read-only context state summary.
 
 ## Data source
 
-- `.cursor/research-context.md`
-- Optional: `.cursor/research-plan.md`
+- `.cursor/research-context.json`
+- Optional: `.cursor/research-plan.md`, `.cursor/research-context.txt`
 
 ## What to report
 
@@ -25,6 +31,6 @@ Read-only summary of the current repository context data.
 ## Next Actions
 
 Based on the state, this skill will suggest:
-- **Add context**: Run `@context-add` with missing notes or links.
-- **Plan**: Run `@context-plan` to update implementation strategy.
-- **Reset**: Run `@context-clear` to remove local research files.
+- **Add context**: **[`@context-add`](../add/SKILL.md)**
+- **Plan**: **[`@context-plan`](../plan/SKILL.md)**
+- **Reset**: **[`@context-clear`](../clear/SKILL.md)**

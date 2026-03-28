@@ -1,17 +1,23 @@
 ---
 name: context-plan
-description: Build or update `.cursor/research-plan.md` from local context notes.
+description: Build `.cursor/research-plan.md` from local context and repo analysis.
 ---
 
-# Context: Plan (Strategy Builder)
+# Craft Plan
 
 **Cursor skill:** **`@context-plan`**
 
-Builds a concrete implementation strategy for the current project from local context notes.
+## Mode
+
+Plan mode only.
+
+## Role
+
+Create actionable implementation plan from context + repo state.
 
 ## Interactive Flow
 
-1. Read `.cursor/research-context.md`.
+1. Read `.cursor/research-context.json`.
 2. Read relevant repository files in read-only mode.
 3. Identify repo-specific goals, constraints, and impacted areas.
 4. Draft or update `.cursor/research-plan.md` with actionable chunks.
@@ -32,3 +38,7 @@ Use this structure in `.cursor/research-plan.md`:
 
 - After adding enough project context with `@context-add`.
 - Before implementation to reduce ambiguity and drift.
+
+## Next Skill
+
+- Execute plan: **[`@context-execute`](../execute/SKILL.md)**

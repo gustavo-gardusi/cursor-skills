@@ -1,35 +1,43 @@
 ---
 name: gh-start
 description: >-
-  Move to main and integrate it, create a new branch from task context, then
-  optionally publish via gh-push.
+  Start a new task branch from canonical main. Derive branch name from ticket,
+  issue, or activity. No publish or PR actions.
 ---
 
-# Start (New Branch)
+# Start New Task
 
 **Cursor skill:** **`@gh-start`**
 
-## Unique ownership
+## Role
 
-- `@gh-start` owns branch creation flow.
-- `@gh-main` owns moving to/integrating `main`.
-- `@gh-push` owns publish operations.
-- `@gh-reset` is the only reset/clean owner (invoked via `@gh-main` when needed).
+Create a clean task branch from canonical `main`.
+
+## Inputs
+
+- Jira key/URL, GitHub issue, or activity phrase.
+
+## Outputs
+
+- New branch checked out from synced local `main`.
+
+## Does Not Do
+
+- Does not push (`@gh-push`).
+- Does not open/update PRs (`@gh-pr`).
+- Does not run verification matrix (`@gh-check`).
 
 ## Workflow
 
-1. **Get Context**: Identify ticket, issue, or activity from user.
-   - Jira: `TIS-503` → `tis-503`
-   - GH Issue: `#42` → `42-fix-login`
-   - Activity: "add login" → `add-login`
+1. Derive branch name from task context.
+2. Run full **[`@gh-main`](../main/SKILL.md)**.
+3. Create branch: `git checkout -b "$BRANCH"`.
+4. Report branch and stop.
 
-2. **Sync Main**: Run full **[`@gh-main`](../main/SKILL.md)** to switch to `main`, fetch remotes, and integrate canonical `main`.
+## Preconditions
 
-3. **Create Branch**: `git checkout -b "$BRANCH"`
-
-4. **Publish (optional)**:
-   - If user asked to publish now, run full **[`@gh-push`](../push/SKILL.md)**.
-   - If user did not ask to publish, stop after local branch creation.
+- Branch name must be valid and non-empty.
+- If already on a feature branch, confirm whether to continue there or create a new branch from `main`.
 
 ## Branch name examples
 
@@ -38,3 +46,10 @@ description: >-
 | Jira           | TIS-503           | `tis-503`        |
 | GH issue       | #42               | `42-fix-login`   |
 | Activity       | add user login    | `add-user-login` |
+
+## Next Skill
+
+- Publish branch: **[`@gh-push`](../push/SKILL.md)**
+- Create/update PR: **[`@gh-pr`](../pr/SKILL.md)**
+
+If blocked, run **[`@gh-main`](../main/SKILL.md)** first and retry.

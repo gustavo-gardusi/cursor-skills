@@ -3,11 +3,17 @@ name: context-clear
 description: Show summary of context data, then ask for confirmation before clearing per-repo state.
 ---
 
-# Context: Clear (Reset State)
+# Reset Context
 
 **Cursor skill:** **`@context-clear`**
 
-Clears local context files for the **current repository only**.
+## Mode
+
+Plan mode only.
+
+## Role
+
+Clear local context artifacts for current repository.
 
 ## Execution Flow
 
@@ -22,5 +28,10 @@ Clears local context files for the **current repository only**.
 
 3. **Execution**:
    If confirmed, it deletes:
-   - `.cursor/research-context.md`
+   - `.cursor/research-context.json`
+   - `.cursor/research-context.txt` (if present)
    - `.cursor/research-plan.md`
+
+## Next Skill
+
+- Add sources again: **[`@context-add`](../add/SKILL.md)**

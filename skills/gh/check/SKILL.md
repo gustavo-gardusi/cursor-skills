@@ -1,108 +1,34 @@
 ---
 name: gh-check
 description: >-
-  Repository health check only: discover stack, pre-check dependencies, install
-  deps/build as needed, then run format/lint/test.
+  Verify repository health only: discover stack, pre-check dependencies, prepare,
+  and run format/lint/test/build checks.
 ---
 
-# Check (discover -> pre-check -> prepare -> evaluate)
+# Test Overall
 
 **Cursor skill:** **`@gh-check`**
 
-This skill is for repository health checks only:
-- discover what the repo expects
-- pre-check required tools are installed
-- prepare dependencies/build
-- evaluate with format/lint/test
+## Role
 
-## Invariant (strict)
-
-`@gh-check` does not run git operations.
-- No branch or remote commands
-- No staging or commit commands
-- No pull/merge/reset/clean commands
-- No push commands
-
-If the user asks for publish actions, hand off to **`@gh-push`**.
-
-## On invoke
-
-Run from repo root (or a user-scoped subproject root in a monorepo).
+Run repository verification and report health.
 
 ## Workflow
 
-### 1) Discover
+1. Discover stack/tooling from docs, config, and CI.
+2. Pre-check required executables and dependencies.
+3. Prepare install/build prerequisites.
+4. Evaluate format/lint/test/build checks.
+5. Report pass/fail and blockers.
 
-Read docs first, then config:
-- `README.md`, `README.rst`, `CONTRIBUTING.md`, `docs/` entries
-- per-package READMEs when the repo points to nested projects
+## Does Not Do
 
-Infer stacks and check tooling from configuration:
-- Node/TS: `package.json`, lockfiles, eslint/prettier/vitest/jest config
-- Python: `pyproject.toml`, `requirements*.txt`, `poetry.lock`, ruff/flake8 config
-- Rust: `Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml`
-- Go: `go.mod`, `go.sum`
-- others: relevant build/test/lint config files
+- No git branch/sync operations.
+- No commit/push/PR operations.
 
-Use this precedence when selecting commands:
-1. README explicit commands
-2. CI workflow commands
-3. task runner / package script commands
-4. conservative defaults
+## Next Skill
 
-### 2) Pre-check required dependencies
+- Publish branch: **[`@gh-push`](../push/SKILL.md)**
+- Create/update PR: **[`@gh-pr`](../pr/SKILL.md)**
 
-Before install or tests, verify required executables exist for the detected stack.
-
-Examples:
-- package managers: `npm`, `pnpm`, `yarn`, `pip`, `uv`, `poetry`, `cargo`, `go`
-- linters/formatters/test tools expected by the repo
-
-If tools are missing:
-- stop early
-- report exactly what is missing
-- provide the shortest clear remediation for the user environment
-
-### 3) Prepare (install/build)
-
-Install dependencies in README order. If not documented, use minimal lockfile-first setup.
-
-Examples:
-- Node: `npm ci` / `pnpm install --frozen-lockfile` / `yarn install --frozen-lockfile`
-- Python: `uv sync` / `poetry install` / `pip install -r requirements.txt`
-- Rust: `cargo fetch` or `cargo build` when required for lint/test
-- Go: `go mod download`
-
-Avoid destructive cleanup. If a cleanup step appears necessary, stop and ask first.
-
-### 4) Evaluate
-
-#### 4a) Umbrella command first (if repo defines one)
-If README/CI defines a single check entrypoint (for example `make check`), run it first.
-
-If that passes and clearly covers format/lint/test, do not duplicate lower-level checks unless README/CI requires parity steps.
-
-#### 4b) Format
-Run stack-appropriate format checks when configured.
-
-#### 4c) Lint
-Run stack-appropriate lint checks when configured.
-
-#### 4d) Test
-Run the primary test commands for detected stacks.
-
-### 5) Report
-
-Summarize:
-- what was inferred (stacks and key files)
-- what was prepared (installs/builds)
-- what was evaluated (format/lint/test), with pass/fail
-- what blocked execution, if any
-
-## Verification checklist
-
-- [ ] Discovery covered docs + config (and CI when present)
-- [ ] Pre-check validated required executables before install/evaluate
-- [ ] Prepare completed using repo-declared commands where available
-- [ ] Evaluate ran relevant format/lint/test checks for detected stacks
-- [ ] No git command was executed as part of `@gh-check`
+If blocked by missing tools, install prerequisites and rerun **[`@gh-check`](../check/SKILL.md)**.

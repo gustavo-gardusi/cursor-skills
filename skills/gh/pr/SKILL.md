@@ -1,38 +1,39 @@
 ---
 name: gh-pr
 description: >-
-  Publish branch through gh-push, then create or update PR metadata from branch
-  diff against base.
+  Create or update PR metadata after sync/publish chain. Runs gh-pull then gh-push,
+  then applies PR title/body with gh CLI.
 ---
 
-# PR
+# Create PR
 
 **Cursor skill:** **`@gh-pr`**
 
-## Unique ownership
+## Role
 
-- `@gh-pr` owns PR create/update metadata.
-- `@gh-push` owns verify/commit/push before PR operations.
-- `@gh-check` stays verify-only and is not duplicated here.
-- Reset/clean behavior is owned only by `@gh-reset`.
+Create or update pull request metadata for current branch.
 
 ## Workflow
 
-1. **Publish branch first**: Run full **[`@gh-push`](../push/SKILL.md)**.
-2. **Resolve existing open PR**: Check whether a PR already exists for current head branch.
-3. **Choose base and diff**: Resolve base (`main` or canonical repo base), inspect `base...HEAD`.
-4. **Write PR content**: Generate title/body from real branch delta.
-5. **Create or edit PR**:
-   - existing PR: `gh pr edit`
-   - no existing PR: `gh pr create`
+1. Run full **[`@gh-pull`](../pull/SKILL.md)**.
+2. Run full **[`@gh-push`](../push/SKILL.md)**.
+3. Resolve existing PR by current head/base.
+4. Prompt user: "Is there a PR template we should follow?" and collect any required headings/format.
+5. Build title/body from full `base...HEAD` delta, applying the template when provided.
+6. `gh pr edit` (if exists) or `gh pr create` (if not).
 
-## PR Description Format
+## Preconditions
 
-### Structure
-1. **Summary** — concise bullets focused on behavior and reviewer impact.
-2. **Impact** — optional, when behavior/runtime implications exist.
-3. **Test plan** — how reviewer can validate.
+- Stop if current branch is `main`; create a feature branch first.
 
-### Rules
+## Quality Rules
+
+- Use full branch scope, not only latest commit.
 - Keep title plain text.
-- Keep body focused on intent and externally visible changes.
+- Avoid repeating compare metadata already shown by GitHub UI.
+
+## Next Skill
+
+- For iteration: **[`@gh-pull`](../pull/SKILL.md)** then **[`@gh-push`](../push/SKILL.md)** again
+
+If blocked by template uncertainty, pause and ask the user to confirm the required PR format.

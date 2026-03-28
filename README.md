@@ -1,6 +1,6 @@
 # Cursor Skills
 
-Markdown-only Cursor skills for GitHub workflow and project-local context planning.
+Markdown-only Cursor skills for GitHub delivery workflow and optional context-driven planning.
 
 Use skills in Cursor chat as `@skill-name` or `/skill-name`.
 
@@ -30,29 +30,100 @@ By default, skills are installed to `~/.cursor/skills-cursor`.
 
 ### Context
 
-- `@context-add` - create/update local project context in `.cursor/research-context.md`
-- `@context-show` - summarize current local context and plan status
-- `@context-plan` - generate/update `.cursor/research-plan.md` from local context
-- `@context-clear` - clear local context files for the current repo
+- `@context-add` - add sources and organize `.cursor/research-context.json`
+- `@context-show` - review current context state
+- `@context-plan` - craft `.cursor/research-plan.md` from context + repo
+- `@context-execute` - execute plan (Plan mode confirmation, then Agent mode execution)
+- `@context-clear` - reset context artifacts for the current workspace
 
 ### GitHub workflow
 
-- `@gh-check` - repository verification only (discover, pre-check deps, prepare, format/lint/test); no git operations
-- `@gh-main` - move to `main` and integrate canonical `main` with merge/conflict handling
-- `@gh-reset` - destructive reset/clean (explicitly confirmed)
-- `@gh-pull` - merge canonical `main` into current branch and resolve conflicts
-- `@gh-push` - commit/push flow after successful `@gh-check`
-- `@gh-pr` - create/update PR metadata after `@gh-push`
-- `@gh-start` - derive branch name, run `@gh-main`, create branch, optionally publish via `@gh-push`
+- `@gh-start` - start new task branch from canonical `main`
+- `@gh-main` - align local `main` with canonical remote
+- `@gh-pull` - sync current branch with tracking and canonical `main`
+- `@gh-check` - test overall (verify stack/tooling/build/lint/test)
+- `@gh-push` - publish branch after successful `@gh-check`
+- `@gh-pr` - create/update PR after `@gh-pull` + `@gh-push`
+
+## Canonical Skill DAGs
+
+Legend:
+- User interactions are top nodes.
+- Orchestrator skills are in the middle.
+- Leaf/internal skills are at the bottom.
+
+### GH flow
+
+```mermaid
+flowchart TD
+    startNewTask[Start New Task] --> ghStart[@gh-start]
+    ghStart --> ghMain[@gh-main]
+
+    createPr[Create PR] --> ghPr[@gh-pr]
+    ghPr --> ghPull[@gh-pull]
+    ghPr --> ghPushFromPr[@gh-push]
+    ghPushFromPr --> ghCheckFromPr[@gh-check]
+
+    publishBranch[Publish Branch] --> ghPush[@gh-push]
+    ghPush --> ghCheck[@gh-check]
+
+    syncBranch[Sync Branch] --> ghPullOnly[@gh-pull]
+
+    testOverall[Test Overall] --> ghCheckOnly[@gh-check]
+```
+
+### Context flow
+
+```mermaid
+flowchart TD
+    resetContext[Reset Context] --> contextClear[@context-clear]
+
+    addSources[Add Sources] --> contextAdd[@context-add]
+    contextAdd --> contextData[.cursor/research-context.json]
+
+    reviewContext[Review Context] --> contextShow[@context-show]
+    contextShow --> contextData
+
+    iterateContext[Iterate] --> contextAdd
+    iterateContext --> contextShow
+
+    craftPlan[Craft Plan] --> contextPlan[@context-plan]
+    contextPlan --> contextDataPlan[.cursor/research-context.json]
+    contextPlan --> planFile[.cursor/research-plan.md]
+
+    executePlan[Execute Plan] --> contextExecute[@context-execute]
+```
+
+### Bridge flow (recommended sequence)
+
+```mermaid
+flowchart TD
+    startBranch[Start New Task] --> ghStartBridge[@gh-start]
+    ghStartBridge --> contextDecision[Need Context Organization]
+    contextDecision -->|No| ghPrDirect[@gh-pr]
+    contextDecision -->|Yes| contextPlanBridge[@context-plan]
+    contextPlanBridge --> contextExecuteBridge[@context-execute]
+    contextExecuteBridge --> ghPrBridge[@gh-pr]
+```
+
+## When to use Context
+
+Use Context flow when:
+- you need multi-source research organization (tickets, PRs, docs, Slack, run logs),
+- you want persistent artifacts (`.cursor/research-context.json`, `.cursor/research-plan.md`),
+- or you need iterative planning before implementation.
+
+Skip Context flow when:
+- native planning in chat is enough,
+- there is little or no external data to organize,
+- and a direct GH delivery path is faster.
 
 ## Context storage model
 
 Context is local to each repository under `.cursor/`:
-
-- `.cursor/research-context.md`
+- `.cursor/research-context.json`
+- `.cursor/research-context.txt` (optional readable export)
 - `.cursor/research-plan.md`
-
-No global browser profile or global context cache is required.
 
 ## More docs
 
