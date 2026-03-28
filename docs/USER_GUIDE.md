@@ -20,6 +20,7 @@ In Cursor chat, type `@` and confirm you can see:
 - `@context-add`
 - `@context-show`
 - `@context-plan`
+- `@context-execute`
 - `@context-clear`
 - `@gh-check`
 - `@gh-main`
@@ -32,11 +33,12 @@ In Cursor chat, type `@` and confirm you can see:
 ## Context workflow (local files only)
 
 ```text
-@context-add -> @context-show -> @context-plan -> @context-clear
+@context-add -> @context-show -> @context-plan -> @context-execute
 ```
 
 Context files are stored in the active repo:
-- `.cursor/research-context.md`
+- `.cursor/research-context.json`
+- `.cursor/research-context.txt` (optional)
 - `.cursor/research-plan.md`
 
 ## GitHub workflow
@@ -54,9 +56,10 @@ Useful subsets:
 ## Important boundaries
 
 - `@gh-check` is verification-only and does not run git commands.
-- `@gh-main` handles merge/conflict sync for `main`, not reset/clean.
+- `@gh-main` orchestrates sync; reset/clean remains in `@gh-reset`.
 - `@gh-reset` is the only reset/clean skill.
 - `@gh-push` is the only publish skill.
+- `@context-execute` starts in Plan mode and must switch to Agent mode before applying changes.
 
 ## Troubleshooting
 

@@ -38,7 +38,7 @@ All context data is local to the active repository under `.cursor/`.
 
 | Skill | Unique role |
 | --- | --- |
-| [**`/gh-check`**](gh/check/SKILL.md) | Verify repository state (discover -> pre-check deps -> prepare -> format/lint/test). No git operations. |
+| [**`/gh-check`**](gh/check/SKILL.md) | Verify repository state (discover -> pre-check deps -> docs consistency -> prepare -> format/lint/test). No git operations. |
 | [**`/gh-main`**](gh/main/SKILL.md) | Sync local `main` through `@gh-reset` + `@gh-pull` orchestration. |
 | [**`/gh-reset`**](gh/reset/SKILL.md) | Destructive branch reset/clean only (explicit confirmations). |
 | [**`/gh-pull`**](gh/pull/SKILL.md) | Merge canonical `main` into the current branch and resolve conflicts. |

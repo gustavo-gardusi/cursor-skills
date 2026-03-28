@@ -40,8 +40,9 @@ By default, skills are installed to `~/.cursor/skills-cursor`.
 
 - `@gh-start` - start new task branch from canonical `main`
 - `@gh-main` - align local `main` with canonical remote
+- `@gh-reset` - destructive reset/clean flow with explicit confirmation
 - `@gh-pull` - sync current branch with tracking and canonical `main`
-- `@gh-check` - test overall (verify stack/tooling/build/lint/test)
+- `@gh-check` - test overall (verify docs + stack/tooling/build/lint/test)
 - `@gh-push` - publish branch after successful `@gh-check`
 - `@gh-pr` - create/update PR after `@gh-pull` + `@gh-push`
 
@@ -56,54 +57,54 @@ Legend:
 
 ```mermaid
 flowchart TD
-    startNewTask[Start New Task] --> ghStart[@gh-start]
-    ghStart --> ghMain[@gh-main]
+    startNewTask[Start New Task] --> ghStart["@gh-start"]
+    ghStart --> ghMain["@gh-main"]
 
-    createPr[Create PR] --> ghPr[@gh-pr]
-    ghPr --> ghPull[@gh-pull]
-    ghPr --> ghPushFromPr[@gh-push]
-    ghPushFromPr --> ghCheckFromPr[@gh-check]
+    createPr[Create PR] --> ghPr["@gh-pr"]
+    ghPr --> ghPull["@gh-pull"]
+    ghPr --> ghPushFromPr["@gh-push"]
+    ghPushFromPr --> ghCheckFromPr["@gh-check"]
 
-    publishBranch[Publish Branch] --> ghPush[@gh-push]
-    ghPush --> ghCheck[@gh-check]
+    publishBranch[Publish Branch] --> ghPush["@gh-push"]
+    ghPush --> ghCheck["@gh-check"]
 
-    syncBranch[Sync Branch] --> ghPullOnly[@gh-pull]
+    syncBranch[Sync Branch] --> ghPullOnly["@gh-pull"]
 
-    testOverall[Test Overall] --> ghCheckOnly[@gh-check]
+    testOverall[Test Overall] --> ghCheckOnly["@gh-check"]
 ```
 
 ### Context flow
 
 ```mermaid
 flowchart TD
-    resetContext[Reset Context] --> contextClear[@context-clear]
+    resetContext[Reset Context] --> contextClear["@context-clear"]
 
-    addSources[Add Sources] --> contextAdd[@context-add]
+    addSources[Add Sources] --> contextAdd["@context-add"]
     contextAdd --> contextData[.cursor/research-context.json]
 
-    reviewContext[Review Context] --> contextShow[@context-show]
+    reviewContext[Review Context] --> contextShow["@context-show"]
     contextShow --> contextData
 
     iterateContext[Iterate] --> contextAdd
     iterateContext --> contextShow
 
-    craftPlan[Craft Plan] --> contextPlan[@context-plan]
+    craftPlan[Craft Plan] --> contextPlan["@context-plan"]
     contextPlan --> contextDataPlan[.cursor/research-context.json]
     contextPlan --> planFile[.cursor/research-plan.md]
 
-    executePlan[Execute Plan] --> contextExecute[@context-execute]
+    executePlan[Execute Plan] --> contextExecute["@context-execute"]
 ```
 
 ### Bridge flow (recommended sequence)
 
 ```mermaid
 flowchart TD
-    startBranch[Start New Task] --> ghStartBridge[@gh-start]
+    startBranch[Start New Task] --> ghStartBridge["@gh-start"]
     ghStartBridge --> contextDecision[Need Context Organization]
-    contextDecision -->|No| ghPrDirect[@gh-pr]
-    contextDecision -->|Yes| contextPlanBridge[@context-plan]
-    contextPlanBridge --> contextExecuteBridge[@context-execute]
-    contextExecuteBridge --> ghPrBridge[@gh-pr]
+    contextDecision -->|No| ghPrDirect["@gh-pr"]
+    contextDecision -->|Yes| contextPlanBridge["@context-plan"]
+    contextPlanBridge --> contextExecuteBridge["@context-execute"]
+    contextExecuteBridge --> ghPrBridge["@gh-pr"]
 ```
 
 ## When to use Context

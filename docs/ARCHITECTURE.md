@@ -17,19 +17,20 @@
 
 ### GitHub workflow boundaries
 
-- `@gh-check`: verification only (discover, dependency pre-check, prepare, format/lint/test). No git commands.
-- `@gh-main`: move to local `main`, fetch remotes, integrate canonical `main`, resolve conflicts.
+- `@gh-check`: verification only (discover, dependency pre-check, docs consistency, prepare, format/lint/test). No git commands.
+- `@gh-main`: orchestrate `main` sync flow.
 - `@gh-reset`: destructive reset/clean only, with explicit confirmations.
-- `@gh-pull`: merge canonical `main` into current branch.
+- `@gh-pull`: merge tracking and canonical `main` into current branch.
 - `@gh-push`: commit/push only after successful `@gh-check`.
 - `@gh-pr`: PR metadata create/edit flow only.
-- `@gh-start`: branch bootstrap and optional publish orchestration.
+- `@gh-start`: create a task branch from canonical `main`.
 
 ### Context boundaries
 
-- `@context-add`: create/update local context file.
+- `@context-add`: create/update local context data.
 - `@context-show`: read-only local summary.
 - `@context-plan`: read local context and produce plan markdown.
+- `@context-execute`: execute plan after mode handoff (Plan -> Agent).
 - `@context-clear`: clear local context files.
 
 No browser orchestration, global profile cache, or script runtime is part of the active architecture.
@@ -38,7 +39,8 @@ No browser orchestration, global profile cache, or script runtime is part of the
 
 Per repository (`<repo>/.cursor/`):
 
-- `research-context.md`: context source of truth.
+- `research-context.json`: context source of truth.
+- `research-context.txt`: optional readable export.
 - `research-plan.md`: planning output.
 
 This keeps context scoped to the current project.
