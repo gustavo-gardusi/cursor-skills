@@ -82,11 +82,11 @@ flowchart TD
     addSources[Add Sources] --> contextAdd["@context-add"]
     contextAdd --> contextData[.cursor/research-context.json]
 
-    reviewContext[Review Context] --> contextShow["@context-show"]
-    contextShow --> contextData
-
     iterateContext[Iterate] --> contextAdd
     iterateContext --> contextShow
+
+    reviewContext[Review Context] --> contextShow["@context-show"]
+    contextShow --> contextData
 
     craftPlan[Craft Plan] --> contextPlan["@context-plan"]
     contextPlan --> contextDataPlan[.cursor/research-context.json]
