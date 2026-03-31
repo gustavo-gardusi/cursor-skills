@@ -7,7 +7,8 @@ description: >-
 
 # Pull (merge + resolve conflicts)
 
-**Cursor skill:** **`@gh-pull`** — Invoked with **`@gh-pull`** in Cursor. Merge and conflict resolution are **`@gh-pull`** only. **Does not** run **`@gh-push`**, **`@gh-check`**, or `git push`—publish and verify with **`@gh-push`** (or **`@gh-check`** alone) in a **separate** invocation when ready.
+Internal executor for the public **`@gh-pull`** boundary.
+This file owns runnable merge/conflict terminal commands for pull/sync behavior.
 
 **Responsibility:** Update the **current branch** by merging its **tracking branch** (if any) and the **canonical root** (`origin/main` or `upstream/main`). **Resolve conflicts** with minimal churn: **prefer incoming (main/root)** and **adapt branch-specific work** so the **branch’s goal** still holds. When merges are committed, **stop**—do not publish here.
 

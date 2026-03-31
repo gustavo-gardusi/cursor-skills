@@ -13,6 +13,9 @@ description: >-
 
 Run repository/docs verification and report health.
 
+Terminal command execution is owned by:
+- **[`internal/gh/repo-check`](../../internal/gh/repo-check/SKILL.md)**
+
 ## Workflow
 
 1. Discover stack/tooling from docs, config, and CI.
@@ -21,6 +24,8 @@ Run repository/docs verification and report health.
 4. Validate docs consistency across `README.md`, `docs/*.md`, and `skills/README.md` against the current public skill set and storage model.
 5. Evaluate format/lint/test/build checks.
 6. Report pass/fail and blockers, including docs drift files if found.
+
+Use `internal/gh/repo-check` for all runnable command steps.
 
 ## Does Not Do
 

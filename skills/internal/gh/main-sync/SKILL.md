@@ -22,4 +22,58 @@ This internal document mirrors the public **`@gh-main`** boundary.
 5. Merge canonical `main` into local `main` (prefer ff-only, resolve conflicts if required).
 6. Verify branch and merge state.
 
-No reset/clean commands are part of this internal main-sync guidance.
+## Command runbook
+
+### 1) Validate repository and switch to `main`
+
+```bash
+git rev-parse --is-inside-work-tree
+git checkout main
+```
+
+If local `main` does not exist:
+
+```bash
+git checkout -b main origin/main
+```
+
+### 2) Fetch remotes
+
+```bash
+git fetch origin
+```
+
+If upstream exists:
+
+```bash
+git fetch upstream
+```
+
+### 3) Resolve canonical root branch
+
+- Prefer `upstream/main` when upstream is source of truth.
+- Otherwise use `origin/main`.
+
+### 4) Merge canonical root into local `main`
+
+Prefer fast-forward:
+
+```bash
+git merge --ff-only "$ROOT_BRANCH"
+```
+
+If fast-forward is not possible, run a normal merge and resolve conflicts:
+
+```bash
+git merge "$ROOT_BRANCH"
+```
+
+### 5) Final verification
+
+```bash
+git branch --show-current
+git status --short
+git log -1 --oneline
+```
+
+No reset/clean commands are part of this internal main-sync executor.

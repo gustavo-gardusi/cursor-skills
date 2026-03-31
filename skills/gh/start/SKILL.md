@@ -1,8 +1,8 @@
 ---
 name: gh-start
 description: >-
-  Start a new task branch from canonical main. Derive branch name from ticket,
-  issue, or activity. No publish or PR actions.
+  Start a new task branch from canonical main by delegating terminal execution
+  to internal main-sync and branch-create executors.
 ---
 
 # Start New Task
@@ -12,6 +12,10 @@ description: >-
 ## Role
 
 Create a clean task branch from canonical `main`.
+
+Terminal command execution is owned by internal skills:
+- **[`internal/gh/main-sync`](../../internal/gh/main-sync/SKILL.md)**
+- **[`internal/gh/branch-create`](../../internal/gh/branch-create/SKILL.md)** (create/switch branch commands)
 
 ## Inputs
 
@@ -30,8 +34,8 @@ Create a clean task branch from canonical `main`.
 ## Workflow
 
 1. Derive branch name from task context.
-2. Run full **[`@gh-main`](../main/SKILL.md)**.
-3. Create branch: `git checkout -b "$BRANCH"`.
+2. Delegate main alignment terminal steps to **[`internal/gh/main-sync`](../../internal/gh/main-sync/SKILL.md)**.
+3. Delegate branch creation and checkout to **[`internal/gh/branch-create`](../../internal/gh/branch-create/SKILL.md)**.
 4. Report branch and stop.
 
 ## Preconditions
@@ -52,4 +56,4 @@ Create a clean task branch from canonical `main`.
 - Publish branch: **[`@gh-push`](../push/SKILL.md)**
 - Create/update PR: **[`@gh-pr`](../pr/SKILL.md)**
 
-If blocked, run **[`@gh-main`](../main/SKILL.md)** first and retry.
+If blocked, rerun internal main sync first and retry branch creation.

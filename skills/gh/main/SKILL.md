@@ -1,8 +1,8 @@
 ---
 name: gh-main
 description: >-
-  Align local main with canonical remote main. Checkout main, reset/clean via
-  gh-reset, then integrate upstream via gh-pull.
+  Align local main with canonical remote main by delegating terminal steps to
+  internal reset/sync executors.
 ---
 
 # Sync Main
@@ -13,12 +13,16 @@ description: >-
 
 Orchestrate safe `main` alignment flow.
 
+Terminal command execution is owned by internal skills:
+- **[`internal/gh/branch-reset`](../../internal/gh/branch-reset/SKILL.md)** for destructive reset/clean
+- **[`internal/gh/main-sync`](../../internal/gh/main-sync/SKILL.md)** for main sync/merge commands
+
 ## Workflow
 
 1. Validate repository.
-2. Checkout `main`.
-3. Run full **[`@gh-reset`](../reset/SKILL.md)**.
-4. Run full **[`@gh-pull`](../pull/SKILL.md)**.
+2. Delegate sync/merge terminal steps to **[`internal/gh/main-sync`](../../internal/gh/main-sync/SKILL.md)** to ensure execution is on local `main`.
+3. If destructive reset/clean is required, run **[`internal/gh/branch-reset`](../../internal/gh/branch-reset/SKILL.md)** while on `main`.
+4. After reset, rerun **[`internal/gh/main-sync`](../../internal/gh/main-sync/SKILL.md)** to confirm `main` is aligned.
 5. Verify `main` is clean and up to date.
 
 ## Does Not Do
@@ -32,4 +36,4 @@ Orchestrate safe `main` alignment flow.
 - Start task branch: **[`@gh-start`](../start/SKILL.md)**
 - Publish branch: **[`@gh-push`](../push/SKILL.md)**
 
-If blocked, run **[`@gh-reset`](../reset/SKILL.md)** and retry.
+If blocked, rerun **[`internal/gh/branch-reset`](../../internal/gh/branch-reset/SKILL.md)** and retry.

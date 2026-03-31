@@ -1,8 +1,8 @@
 ---
 name: gh-pr
 description: >-
-  Create or update PR metadata after sync/publish chain. Runs gh-pull then gh-push,
-  then applies PR title/body with gh CLI.
+  Create or update PR metadata by delegating sync/publish/pr terminal steps to
+  internal executors.
 ---
 
 # Create PR
@@ -13,14 +13,20 @@ description: >-
 
 Create or update pull request metadata for current branch.
 
+Terminal command execution is owned by:
+- **[`internal/gh/pull-merge`](../../internal/gh/pull-merge/SKILL.md)**
+- **[`internal/gh/repo-check`](../../internal/gh/repo-check/SKILL.md)**
+- **[`internal/gh/publish`](../../internal/gh/publish/SKILL.md)**
+- **[`internal/gh/pr-metadata`](../../internal/gh/pr-metadata/SKILL.md)**
+
 ## Workflow
 
-1. Run full **[`@gh-pull`](../pull/SKILL.md)**.
-2. Run full **[`@gh-push`](../push/SKILL.md)**.
+1. Delegate sync/merge terminal steps to **[`internal/gh/pull-merge`](../../internal/gh/pull-merge/SKILL.md)**.
+2. Delegate check + publish terminal steps to **[`internal/gh/repo-check`](../../internal/gh/repo-check/SKILL.md)** and **[`internal/gh/publish`](../../internal/gh/publish/SKILL.md)**.
 3. Resolve existing PR by current head/base.
 4. Prompt user: "Is there a PR template we should follow?" and collect any required headings/format.
 5. Build title/body from full `base...HEAD` delta, applying the template when provided.
-6. `gh pr edit` (if exists) or `gh pr create` (if not).
+6. Delegate PR create/update command execution to **[`internal/gh/pr-metadata`](../../internal/gh/pr-metadata/SKILL.md)**.
 
 ## Preconditions
 

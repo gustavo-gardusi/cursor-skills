@@ -39,7 +39,7 @@ All context data is local to the active repository under `.cursor/`.
 | Skill | Unique role |
 | --- | --- |
 | [**`/gh-check`**](gh/check/SKILL.md) | Verify repository state (discover -> pre-check deps -> docs consistency -> prepare -> format/lint/test). No git operations. |
-| [**`/gh-main`**](gh/main/SKILL.md) | Sync local `main` through `@gh-reset` + `@gh-pull` orchestration. |
+| [**`/gh-main`**](gh/main/SKILL.md) | Sync local `main` via internal reset/sync executors. |
 | [**`/gh-reset`**](gh/reset/SKILL.md) | Destructive branch reset/clean only (explicit confirmations). |
 | [**`/gh-pull`**](gh/pull/SKILL.md) | Merge canonical `main` into the current branch and resolve conflicts. |
 | [**`/gh-push`**](gh/push/SKILL.md) | Commit/publish flow, always after full `@gh-check`. |
@@ -48,7 +48,9 @@ All context data is local to the active repository under `.cursor/`.
 
 ## Boundary rules
 
-- `@gh-check` never executes git commands.
+- Public `gh-*` skills keep detached policy/orchestration guidance.
+- Runnable terminal command sets live under `skills/internal/gh/*`.
+- `@gh-check` is orchestration-only in public scope.
 - `@gh-main` is orchestration-only for main sync flow.
 - `@gh-reset` is the only skill that defines or executes reset/clean behavior.
 - `@gh-push` is the only skill that pushes.

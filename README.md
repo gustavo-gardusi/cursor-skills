@@ -18,13 +18,26 @@ Optional custom target:
 ./install.sh /path/to/custom/skills-cursor
 ```
 
+Optional cleanup before install:
+
+```bash
+./install.sh --clean
+# or
+./install.sh /path/to/custom/skills-cursor --reset
+```
+
 By default, skills are installed to `~/.cursor/skills-cursor`.
+During installation, each skill is normalized to a shared prefixed name built from its full path under `skills/` (excluding `SKILL.md`), replacing `/` with `-`.
+Example: `skills/a/b/c/SKILL.md` becomes skill `@a-b-c`.
 
 ## Repository layout
 
 - `skills/` - public and internal skill markdown files
 - `docs/` - documentation for architecture, usage, and references
 - `install.sh` - only installer entrypoint
+
+Public GH skills keep detached policy/orchestration guidance. Runnable terminal
+commands are owned by internal GH skills under `skills/internal/gh/`.
 
 ## Public skills
 

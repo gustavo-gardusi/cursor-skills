@@ -13,6 +13,9 @@ description: >-
 
 Merge latest remote updates into the current branch.
 
+Terminal command execution is owned by:
+- **[`internal/gh/pull-merge`](../../internal/gh/pull-merge/SKILL.md)**
+
 ## Workflow
 
 1. Detect current branch and fetch remotes.
@@ -20,6 +23,8 @@ Merge latest remote updates into the current branch.
 3. Merge canonical `main` (`upstream/main` preferred, else `origin/main`).
 4. Resolve conflicts carefully and commit merge.
 5. Report sync result.
+
+Use `internal/gh/pull-merge` for all runnable command steps.
 
 ## Preconditions
 

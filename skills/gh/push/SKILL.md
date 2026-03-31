@@ -1,7 +1,8 @@
 ---
 name: gh-push
 description: >-
-  Publish current branch after full gh-check. Handles commit and push only.
+  Publish current branch by delegating terminal checks and publish commands to
+  internal executors.
 ---
 
 # Publish Branch
@@ -12,12 +13,15 @@ description: >-
 
 Safely publish current branch.
 
+Terminal command execution is owned by:
+- **[`internal/gh/repo-check`](../../internal/gh/repo-check/SKILL.md)**
+- **[`internal/gh/publish`](../../internal/gh/publish/SKILL.md)** (status/commit/push commands)
+
 ## Workflow
 
-1. Run full **[`@gh-check`](../check/SKILL.md)**.
+1. Delegate repository checks to **[`internal/gh/repo-check`](../../internal/gh/repo-check/SKILL.md)**.
 2. Stop on failure.
-3. Commit if working tree is dirty.
-4. Push current branch (`git push` or `git push -u`).
+3. Delegate commit/push execution to **[`internal/gh/publish`](../../internal/gh/publish/SKILL.md)**.
 
 ## Preconditions
 

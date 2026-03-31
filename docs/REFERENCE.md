@@ -17,7 +17,7 @@ Flow: `@context-add` -> `@context-show` -> `@context-plan` -> `@context-execute`
 | Skill | Unique role |
 |---|---|
 | `@gh-check` | Verify only (discover, pre-check deps, docs consistency, prepare, format/lint/test). No git operations. |
-| `@gh-main` | Orchestrate `main` sync via `@gh-reset` + `@gh-pull`. |
+| `@gh-main` | Orchestrate `main` sync via internal reset/sync executors. |
 | `@gh-reset` | Single owner of reset/clean operations, with confirmations. |
 | `@gh-pull` | Merge tracking/canonical `main` into current branch. |
 | `@gh-push` | Commit and publish after successful `@gh-check`. |
@@ -28,7 +28,9 @@ Flow: `@gh-start` -> work -> `@gh-push` -> `@gh-pr`
 
 ## Key boundaries
 
-- `@gh-check` never runs git commands.
+- Public `gh-*` skills keep detached guidance only.
+- Runnable terminal command sets live in `skills/internal/gh/*`.
+- `@gh-check` is orchestration-only in public scope.
 - `@gh-main` is orchestration-only.
 - `@gh-reset` is the only skill that defines or executes reset/clean behavior.
 - `@gh-push` is the only push skill.

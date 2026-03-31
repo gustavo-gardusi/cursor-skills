@@ -14,6 +14,17 @@ Optional target path:
 ./install.sh /path/to/skills-cursor
 ```
 
+Optional cleanup before install:
+
+```bash
+./install.sh --clean
+# or
+./install.sh /path/to/skills-cursor --reset
+```
+
+Installed skill names are generated from the full skill path (under `skills/`) with `/` replaced by `-`.
+Example: `skills/a/b/c/SKILL.md` is installed and invoked as `@a-b-c`.
+
 ## Verify installation
 
 In Cursor chat, type `@` and confirm you can see:
@@ -55,7 +66,9 @@ Useful subsets:
 
 ## Important boundaries
 
-- `@gh-check` is verification-only and does not run git commands.
+- Public `gh-*` skills keep detached policy/orchestration guidance.
+- Runnable terminal command sets are owned by `skills/internal/gh/*`.
+- `@gh-check` is verification-only in public scope.
 - `@gh-main` orchestrates sync; reset/clean remains in `@gh-reset`.
 - `@gh-reset` is the only reset/clean skill.
 - `@gh-push` is the only publish skill.
