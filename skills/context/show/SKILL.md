@@ -1,24 +1,36 @@
 ---
 name: context-show
-description: Show the current exploration state, including queue preview and confidence level.
+description: Show a concise summary from local context artifacts.
 ---
 
-# Context: Show (Intelligence Report)
+# Review Context
 
 **Cursor skill:** **`@context-show`**
 
-Displays a summary of the current research state, queue, and overall confidence.
+## Mode
 
-## What it shows
+Plan mode only.
 
-1. **Queue Preview**: The top 3 recommended links from `.cursor/research-queue.json`.
-2. **Visited Count**: Total unique pages visited (from global visited list).
-3. **Context Summary**: A brief overview of the destination pages found so far in `.cursor/research-context.json`.
-4. **Confidence Level**: A % score indicating how close you are to the exploration goal, based on the collected context.
+## Role
+
+Read-only context state summary.
+
+## Data source
+
+- `.cursor/research-context.json`
+- Optional: `.cursor/research-plan.md`, `.cursor/research-context.txt`
+
+## What to report
+
+1. Goal summary (if present)
+2. Count of context entries/notes
+3. Top current blockers/open questions
+4. Last significant decisions captured
+5. Whether a plan file exists and appears up to date
 
 ## Next Actions
 
 Based on the state, this skill will suggest:
-- **Continue**: Run `@context-add` to keep exploring the queue.
-- **Strategize**: Run `@context-plan` to evaluate findings and decide next steps.
-- **Reset**: Run `@context-clear` to start fresh.
+- **Add context**: **[`@context-add`](../add/SKILL.md)**
+- **Plan**: **[`@context-plan`](../plan/SKILL.md)**
+- **Reset**: **[`@context-clear`](../clear/SKILL.md)**

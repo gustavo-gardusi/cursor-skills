@@ -1,69 +1,46 @@
 # Architecture
 
-## Design Philosophy
+## Principles
 
-This repository uses a **skills-only architecture**. There are no Node.js scripts, no Python scripts, and no `npm install` requirements. Everything is driven by Cursor skills (`.md` files) that orchestrate native tools, standard shell commands, and embedded evaluation logic.
+- Markdown-first skill repository.
+- No Node runtime/toolchain required for installation or usage of this repo.
+- One installer entrypoint: `install.sh`.
+- Strong skill ownership boundaries to avoid overlap.
 
-### 1. Domain-Based Internal Organization
+## Repository shape
 
-We strictly separate public, user-facing skills from internal utilities:
+- `skills/` contains all public/internal skill definitions.
+- `docs/` contains supporting documentation.
+- `install.sh` copies skills into Cursor's local skill directory.
 
-- **Public (`skills/context/`, `skills/gh/`)**: Simple, orchestrating skills meant to be invoked directly by the user (e.g., `@context-add`).
-- **Internal (`skills/internal/`)**: Small, single-purpose utility skills organized by domain. These are called by public skills to perform specific tasks (e.g., evaluating a page, checking visited status).
+## Skill boundary model
 
-### 2. Sub-Skill Orchestration Model
+### GitHub workflow boundaries
 
-Instead of writing massive 500-line skill files, complex operations are broken down into sub-skills. For example, when `@context-add` runs, it sequentially invokes:
-1. `browser-navigator`
-2. `snapshot-save`
-3. `page-path-evaluator`
-4. `queue-modify`
+- `@gh-check`: verification only (discover, dependency pre-check, docs consistency, prepare, format/lint/test). No git commands.
+- `@gh-main`: orchestrate `main` sync flow.
+- `@gh-reset`: destructive reset/clean only, with explicit confirmations.
+- `@gh-pull`: merge tracking and canonical `main` into current branch.
+- `@gh-push`: commit/push only after successful `@gh-check`.
+- `@gh-pr`: PR metadata create/edit flow only.
+- `@gh-start`: create a task branch from canonical `main`.
 
-This ensures skills remain readable, maintainable, and highly reusable.
+### Context boundaries
 
----
+- `@context-add`: create/update local context data.
+- `@context-show`: read-only local summary.
+- `@context-plan`: read local context and produce plan markdown.
+- `@context-execute`: execute plan after mode handoff (Plan -> Agent).
+- `@context-clear`: clear local context files.
 
-## Context Flow: Real-Time Exploration
+No browser orchestration, global profile cache, or script runtime is part of the active architecture.
 
-The crown jewel of this architecture is the real-time exploratory context flow.
+## Local context storage
 
-### The Problem it Solves
-Traditional search requires knowing exactly what you're looking for. Codebases and enterprise environments (GitHub PRs + Jira + Slack) require *exploration*—clicking links, reading context, and pivoting based on findings.
+Per repository (`<repo>/.cursor/`):
 
-### The Solution: CDP Listening
-When you run `@context-add <url>`, it does **not** just fetch that URL and stop.
+- `research-context.json`: context source of truth.
+- `research-context.txt`: optional readable export.
+- `research-plan.md`: planning output.
 
-1. **Browser Launch**: It launches a real Firefox window using your shared global profile (so you are already logged in to your tools).
-2. **Passive Listening**: It attaches to Firefox via CDP (Chrome DevTools Protocol) and listens to **all tabs**.
-3. **Natural Navigation**: You browse naturally. You click a link, open a new tab, or log in.
-4. **Auto-Capture**: Every time a page finishes loading, the skill automatically:
-   - Captures the visible text and links.
-   - Evaluates the page against your exploration goal.
-   - Saves a snapshot.
-   - Updates your suggested queue.
-   - Posts a summary in the Cursor chat.
-
-You get AI assistance *while* you browse, without having to copy-paste URLs back into the chat.
-
----
-
-## Storage Model (Detailed)
-
-We use a hybrid storage model to balance cross-project efficiency with project-specific focus.
-
-### Global Storage (Shared across all Cursor workspaces)
-Located at `$HOME/.cursor/browser-profiles/`
-
-- **`Default/`**: The actual Firefox profile directory. Maintains your login sessions across all projects.
-- **`snapshots/metadata.json`**: An index of every URL you've ever visited via the tool.
-- **`snapshots/{hash}.json`**: The actual text extraction of a page. If you open PR #123 in Project A, and later need it in Project B, the snapshot is reused instantly without re-fetching.
-- **`research-visited.txt`**: A simple flat list of URLs to prevent infinite loops in the queue manager.
-
-### Per-Repo Storage
-Located at `<project-root>/.cursor/`
-
-- **`research-queue.json`**: The prioritized list of links you should click next *for this specific project*.
-- **`research-context.json`**: The accumulated findings relevant to your current task.
-- **`research-plan.md`**: The final output strategy generated by `@context-plan`.
-
-This ensures your research in Project A doesn't pollute the context of Project B, while still benefiting from shared logins and cached snapshots.
+This keeps context scoped to the current project.

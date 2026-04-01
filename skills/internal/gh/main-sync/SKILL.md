@@ -1,58 +1,79 @@
 ---
 name: gh-main
 description: >-
-  Clean local main: checkout main, gh-reset, gh-pull. No push—use gh-push separately
-  or rely on gh-start after a new branch. Standalone or step 1 of gh-start.
+  Internal guidance for moving to main and integrating canonical main without
+  destructive reset/clean.
 ---
 
-# Main (checkout main, reset, pull)
+# Main Sync (internal)
 
-**Cursor skill:** **`@gh-main`** — The user runs this workflow by invoking **`@gh-main`** in Cursor. Every step below is part of **`@gh-main`** unless a **Hand off** block tells you to run a *different* skill in full.
+This internal document mirrors the public **`@gh-main`** boundary.
 
-**Responsibility:** Put **local `main`** in a known-good state **without publishing**: after checkout (steps below), run **`@gh-reset`** → **`@gh-pull`**. **`@gh-pull`** does **not** push. To **`git push`** **`main`** (or any branch), run **`@gh-push`** **after** **`@gh-main`** when the user asks to publish.
+## Ownership split
+- `@gh-main`: switch to `main`, fetch remotes, integrate canonical `main`, resolve conflicts.
+- `@gh-reset`: destructive reset/clean only when explicitly requested.
+- `@gh-push`: publish only.
 
-**When to use:** (1) **Standalone** — clean, up-to-date **`main`** locally only. (2) **Inside [`@gh-start`](../start/SKILL.md)** — **`@gh-start`** runs **this entire skill** first, then creates a branch, then **`@gh-push`**; **do not** run **`@gh-main`** again before **`@gh-start`** or duplicate its git steps elsewhere for “get on **main** first.”
+## Internal flow
+1. Validate repo.
+2. Checkout local `main` (create from `origin/main` if needed).
+3. Fetch `origin` and `upstream` when available.
+4. Choose canonical `main` (`upstream/main` else `origin/main`).
+5. Merge canonical `main` into local `main` (prefer ff-only, resolve conflicts if required).
+6. Verify branch and merge state.
 
-## On invoke
+## Command runbook
 
-*`@gh-main`* — State that **`@gh-reset`** does **not** stash: on a dirty **`main`**, the user must **abort** or **explicitly trash** local changes before reset+clean (see that skill). Run commands one by one.
+### 1) Validate repository and switch to `main`
 
-## Workflow
+```bash
+git rev-parse --is-inside-work-tree
+git checkout main
+```
 
-### 1. Validate
+If local `main` does not exist:
 
-*`@gh-main`* — Local prep only (not another skill).
+```bash
+git checkout -b main origin/main
+```
 
-`git rev-parse --is-inside-work-tree`. Fail if detached HEAD is required to be avoided—**checkout `main` first** (step 2).
+### 2) Fetch remotes
 
-### 2. Checkout main
+```bash
+git fetch origin
+```
 
-*`@gh-main`* — Local git only.
+If upstream exists:
 
-`git checkout main`  
-If `main` does not exist locally but exists as `origin/main`: `git checkout -b main origin/main` or `git branch main origin/main && git checkout main` as appropriate.
+```bash
+git fetch upstream
+```
 
-### 3. Hand off to **`@gh-reset`**
+### 3) Resolve canonical root branch
 
-> **Run the full Cursor skill [`@gh-reset`](../reset/SKILL.md)** — not a shortcut.  
-> On the current branch (`main`), execute **every** step: validate → stay on branch → fetch → resolve **`$TARGET`** → **if dirty: abort or confirm trash** (no stash) → **discover** repo signals → **`git clean -fdxn`** dry-run → **confirm** reset+clean (see **`@gh-reset`** nested rule for one combined confirm) → **`git reset --hard`** → **confirm** clean if not combined → **`git clean -fdx`** → optional non-git caches (if user asked) → verify. Do **not** replace with ad-hoc `git reset`/`clean` unless the user explicitly opts out of the skill.
+- Prefer `upstream/main` when upstream is source of truth.
+- Otherwise use `origin/main`.
 
-### 4. Hand off to **`@gh-pull`**
+### 4) Merge canonical root into local `main`
 
-> **Run the full Cursor skill [`@gh-pull`](../pull/SKILL.md)** — not a shortcut.  
-> While still on `main`, execute **every** step of **`@gh-pull`** through its **§6 Done** (merge only; **no** **`@gh-push`** inside **`@gh-pull`**).
+Prefer fast-forward:
 
-### 5. Verify
+```bash
+git merge --ff-only "$ROOT_BRANCH"
+```
 
-*`@gh-main`* — Confirm the outcome of **`@gh-main`**.
+If fast-forward is not possible, run a normal merge and resolve conflicts:
 
-`git status --short` is clean. `git branch --show-current` is `main`. `git log -1 --oneline` matches expectations for up-to-date main.
+```bash
+git merge "$ROOT_BRANCH"
+```
 
-**Do not** run **`@gh-push`** inside **`@gh-main`**. If the user wants **`main`** on the remote, tell them to run **`@gh-push`** next ( **`@gh-check`** runs inside **`@gh-push`**).
+### 5) Final verification
 
-## Notes
+```bash
+git branch --show-current
+git status --short
+git log -1 --oneline
+```
 
-*`@gh-main`*
-- **Order matters:** **`@gh-reset`** → **`@gh-pull`** only.
-- **`@gh-reset`** does **not** stash—if **`main`** is dirty, **commit** first or **abort**; to throw work away, confirm **trash and align** inside **`@gh-reset`**.
-- For a **feature branch** sync (not switching to main), use **`@gh-pull`** alone on that branch, not **`@gh-main`**.
+No reset/clean commands are part of this internal main-sync executor.

@@ -17,7 +17,7 @@ Adds new items to the queue.
   1. Load existing `.cursor/research-queue.json` (create if missing).
   2. For each item:
      - Check if `url` already exists in queue (skip if yes).
-     - Ensure URL is not in the global visited set (call `@context-visited-check`).
+     - Ensure URL is not in the visited set (call `@visited-check`).
      - Add to queue list.
   3. Sort entire queue descending by `score`.
   4. Truncate queue to maximum 15 items.
